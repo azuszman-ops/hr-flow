@@ -184,6 +184,7 @@ class MessageLog(Base):
     status = Column(String(50), nullable=False)   # sent / failed / delivered
     external_id = Column(String(200), nullable=True)  # Twilio SID
     is_reminder = Column(Boolean, default=False)
+    is_reminder_2 = Column(Boolean, default=False)
     sent_at = Column(DateTime(timezone=True), server_default=func.now())
     error_message = Column(Text, nullable=True)
 
@@ -206,6 +207,11 @@ DEFAULT_REMINDER_MESSAGE = (
     "Link: {schedule_link}"
 )
 
+DEFAULT_REMINDER_2_MESSAGE = (
+    "Hej {first_name}! To ostatnie przypomnienie — prosimy o uzupełnienie grafiku na {month_name}.\n\n"
+    "Link: {schedule_link}"
+)
+
 
 class TenantSettings(Base):
     __tablename__ = "tenant_settings"
@@ -215,6 +221,8 @@ class TenantSettings(Base):
     initial_message = Column(Text, nullable=False, default=DEFAULT_INITIAL_MESSAGE)
     reminder_message = Column(Text, nullable=False, default=DEFAULT_REMINDER_MESSAGE)
     reminder_days = Column(Integer, nullable=False, default=3)
+    reminder_2_message = Column(Text, nullable=True, default=DEFAULT_REMINDER_2_MESSAGE)
+    reminder_2_days = Column(Integer, nullable=True, default=1)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     tenant = relationship("Tenant")

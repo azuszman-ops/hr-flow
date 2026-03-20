@@ -14,7 +14,7 @@ from app.database import AsyncSessionLocal
 from app.models import (
     MessageCampaign, MessageLog, Employee, ScheduleSubmission,
     TenantSettings, MessageChannel, CampaignStatus,
-    DEFAULT_REMINDER_MESSAGE,
+    DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import send_whatsapp, render_template, MONTH_NAMES_PL
 
@@ -76,12 +76,19 @@ async def send_follow_up_reminders():
                 )
             ).scalars().all()
 
+            reminder_2_template = (
+                tenant_settings.reminder_2_message
+                if tenant_settings and tenant_settings.reminder_2_message
+                else DEFAULT_REMINDER_2_MESSAGE
+            )
+            reminder_2_days = tenant_settings.reminder_2_days if tenant_settings and tenant_settings.reminder_2_days else 1
+
             for log in initial_logs:
                 emp = log.employee
                 if not emp or not emp.is_active or not emp.phone_whatsapp:
                     continue
 
-                # Sprawdź, czy już wysłano przypomnienie tej kampanii temu pracownikowi
+                # Sprawdź, czy już wysłano przypomnienie 1
                 existing_reminder = (
                     await db.execute(
                         select(MessageLog).where(
@@ -91,9 +98,6 @@ async def send_follow_up_reminders():
                         )
                     )
                 ).scalar_one_or_none()
-
-                if existing_reminder:
-                    continue  # Już wysłano przypomnienie
 
                 # Sprawdź, czy pracownik uzupełnił grafik
                 submission = (
@@ -107,28 +111,64 @@ async def send_follow_up_reminders():
                 ).scalar_one_or_none()
 
                 if submission:
-                    continue  # Grafik już uzupełniony — nie wysyłaj przypomnienia
+                    continue  # Grafik uzupełniony — nie wysyłaj
 
-                # Wyślij przypomnienie
-                month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
-                message = render_template(reminder_template, emp, month_name, emp.token)
-                result = await send_whatsapp(emp.phone_whatsapp, message)
+                if not existing_reminder:
+                    # Wyślij przypomnienie 1
+                    month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
+                    message = render_template(reminder_template, emp, month_name, emp.token)
+                    result = await send_whatsapp(emp.phone_whatsapp, message)
+                    reminder_log = MessageLog(
+                        campaign_id=campaign.id,
+                        employee_id=emp.id,
+                        channel=MessageChannel.whatsapp,
+                        phone_or_email=emp.phone_whatsapp,
+                        status=result["status"],
+                        external_id=result.get("external_id"),
+                        error_message=result.get("error"),
+                        is_reminder=True,
+                    )
+                    db.add(reminder_log)
+                    logger.info(
+                        "[Scheduler] Reminder 1 sent to %s %s (campaign %d) — status: %s",
+                        emp.first_name, emp.last_name, campaign.id, result["status"]
+                    )
+                elif (
+                    existing_reminder.status == "sent"
+                    and existing_reminder.sent_at <= now - timedelta(days=reminder_2_days)
+                ):
+                    # Sprawdź, czy już wysłano przypomnienie 2
+                    existing_reminder_2 = (
+                        await db.execute(
+                            select(MessageLog).where(
+                                MessageLog.campaign_id == campaign.id,
+                                MessageLog.employee_id == emp.id,
+                                MessageLog.is_reminder_2 == True,
+                            )
+                        )
+                    ).scalar_one_or_none()
 
-                reminder_log = MessageLog(
-                    campaign_id=campaign.id,
-                    employee_id=emp.id,
-                    channel=MessageChannel.whatsapp,
-                    phone_or_email=emp.phone_whatsapp,
-                    status=result["status"],
-                    external_id=result.get("external_id"),
-                    error_message=result.get("error"),
-                    is_reminder=True,
-                )
-                db.add(reminder_log)
-                logger.info(
-                    "[Scheduler] Reminder sent to %s %s (campaign %d) — status: %s",
-                    emp.first_name, emp.last_name, campaign.id, result["status"]
-                )
+                    if not existing_reminder_2:
+                        # Wyślij przypomnienie 2
+                        month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
+                        message = render_template(reminder_2_template, emp, month_name, emp.token)
+                        result = await send_whatsapp(emp.phone_whatsapp, message)
+                        reminder_2_log = MessageLog(
+                            campaign_id=campaign.id,
+                            employee_id=emp.id,
+                            channel=MessageChannel.whatsapp,
+                            phone_or_email=emp.phone_whatsapp,
+                            status=result["status"],
+                            external_id=result.get("external_id"),
+                            error_message=result.get("error"),
+                            is_reminder=False,
+                            is_reminder_2=True,
+                        )
+                        db.add(reminder_2_log)
+                        logger.info(
+                            "[Scheduler] Reminder 2 sent to %s %s (campaign %d) — status: %s",
+                            emp.first_name, emp.last_name, campaign.id, result["status"]
+                        )
 
         await db.commit()
     logger.info("[Scheduler] Follow-up reminder job completed")

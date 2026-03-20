@@ -53,7 +53,7 @@ from app.models import (
     Tenant, Contract, Employee, ContractEmployee,
     ScheduleSubmission, AvailabilityDay, AvailabilityStatus,
     MessageTemplate, MessageCampaign, MessageLog, MessageChannel, CampaignStatus,
-    TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE,
+    TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
     send_whatsapp, render_template, MONTH_NAMES_PL, build_schedule_link
@@ -141,10 +141,12 @@ async def admin_calendar(
         raise HTTPException(404)
 
     now = datetime.now()
-    if year is None:
-        year = now.year
-    if month is None:
-        month = now.month
+    if year is None or month is None:
+        # Domyślnie: następny miesiąc (zbieramy grafik na przyszły miesiąc)
+        if now.month == 12:
+            year, month = now.year + 1, 1
+        else:
+            year, month = now.year, now.month + 1
 
     # Prev / next month
     if month == 1:
@@ -273,6 +275,22 @@ async def delete_contract(tenant_id: int, contract_id: int, db: AsyncSession = D
     contract = await db.get(Contract, contract_id)
     if contract and contract.tenant_id == tenant_id:
         await db.delete(contract)
+        await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
+
+
+@router.post("/admin/{tenant_id}/contracts/{contract_id}/edit")
+async def edit_contract(
+    tenant_id: int,
+    contract_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    contract = await db.get(Contract, contract_id)
+    if contract and contract.tenant_id == tenant_id:
+        contract.name = name
+        contract.description = description or None
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
 
@@ -487,9 +505,16 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
         )
     ).scalars().all()
     now = datetime.now()
+    # default_month = następny miesiąc (zbieramy grafik na przyszły miesiąc)
+    if now.month == 12:
+        default_year, default_month = now.year + 1, 1
+    else:
+        default_year, default_month = now.year, now.month + 1
     return templates.TemplateResponse("admin/campaigns.html", {
         "request": request, "tenant": tenant, "campaigns": campaigns,
-        "employees": employees, "contracts": contracts, "now": now, "month_names": MONTH_NAMES_PL
+        "employees": employees, "contracts": contracts,
+        "now": now, "default_year": default_year, "default_month": default_month,
+        "month_names": MONTH_NAMES_PL
     })
 
 
@@ -597,6 +622,15 @@ async def send_campaign(
     return JSONResponse({"sent": sent, "failed": failed})
 
 
+@router.post("/admin/{tenant_id}/campaigns/{campaign_id}/delete")
+async def delete_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = Depends(get_db)):
+    campaign = await db.get(MessageCampaign, campaign_id)
+    if campaign and campaign.tenant_id == tenant_id:
+        await db.delete(campaign)
+        await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
+
+
 # ============================================================
 # ADMIN — Ustawienia
 # ============================================================
@@ -619,6 +653,8 @@ async def admin_settings(
             initial_message=DEFAULT_INITIAL_MESSAGE,
             reminder_message=DEFAULT_REMINDER_MESSAGE,
             reminder_days=3,
+            reminder_2_message=DEFAULT_REMINDER_2_MESSAGE,
+            reminder_2_days=1,
         )
     saved = request.query_params.get("saved") == "1"
     return templates.TemplateResponse("admin/settings.html", {
@@ -632,6 +668,8 @@ async def save_settings(
     initial_message: str = Form(...),
     reminder_message: str = Form(...),
     reminder_days: int = Form(3),
+    reminder_2_message: str = Form(""),
+    reminder_2_days: int = Form(1),
     db: AsyncSession = Depends(get_db),
 ):
     tenant = await db.get(Tenant, tenant_id)
@@ -646,12 +684,16 @@ async def save_settings(
         settings.initial_message = initial_message
         settings.reminder_message = reminder_message
         settings.reminder_days = reminder_days
+        settings.reminder_2_message = reminder_2_message or None
+        settings.reminder_2_days = reminder_2_days
     else:
         settings = TenantSettings(
             tenant_id=tenant_id,
             initial_message=initial_message,
             reminder_message=reminder_message,
             reminder_days=reminder_days,
+            reminder_2_message=reminder_2_message or None,
+            reminder_2_days=reminder_2_days,
         )
         db.add(settings)
     await db.commit()

@@ -18,14 +18,14 @@
     <form method="post" action="/admin/{{ tenant.id }}/campaigns/create" class="flex gap-3 items-end">
         <div>
             <label class="text-xs text-gray-500 block mb-1">Rok</label>
-            <input name="year" type="number" value="{{ now.year }}" min="2025" max="2030"
+            <input name="year" type="number" value="{{ default_year }}" min="2025" max="2030"
                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
         </div>
         <div>
             <label class="text-xs text-gray-500 block mb-1">Miesiąc</label>
             <select name="month" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
                 {% for num, name in month_names.items() %}
-                <option value="{{ num }}" {% if num == now.month + 1 %}selected{% endif %}>{{ name }}</option>
+                <option value="{{ num }}" {% if num == default_month %}selected{% endif %}>{{ name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -54,6 +54,10 @@
                 </span>
             </div>
             <div class="flex gap-3 items-center">
+                <form method="post" action="/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/delete"
+                      onsubmit="return confirm('Usunąć kampanię {{ month_names.get(camp.month) }} {{ camp.year }}?')">
+                    <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
+                </form>
                 <button @click="showContracts = !showContracts"
                         class="text-gray-500 hover:text-gray-700 text-xs border border-gray-300 rounded-lg px-3 py-1.5">
                     Wybierz kontrakty

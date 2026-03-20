@@ -9,18 +9,20 @@
     </div>
     <div class="flex flex-wrap gap-2 items-center">
         <!-- Filtr kontraktu -->
-        <form method="get" class="flex gap-2 items-center flex-wrap">
-            <input type="hidden" name="year" value="{{ year }}">
-            <input type="hidden" name="month" value="{{ month }}">
-            <select name="contract_id"
-                    onchange="this.form.submit()"
-                    class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-                <option value="">Wszyscy pracownicy</option>
-                {% for c in contracts %}
-                <option value="{{ c.id }}" {% if selected_contract_id == c.id %}selected{% endif %}>{{ c.name }}</option>
-                {% endfor %}
-            </select>
-        </form>
+        <select id="contractFilter"
+                onchange="
+                    const url = new URL(window.location);
+                    url.searchParams.set('year', '{{ year }}');
+                    url.searchParams.set('month', '{{ month }}');
+                    if (this.value) url.searchParams.set('contract_id', this.value);
+                    else url.searchParams.delete('contract_id');
+                    window.location.href = url.toString();"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            <option value="">Wszyscy pracownicy</option>
+            {% for c in contracts %}
+            <option value="{{ c.id }}" {% if selected_contract_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
         <!-- Nawigacja miesiąc -->
         <div class="flex gap-1">
             <a href="?year={{ prev_year }}&month={{ prev_month }}{% if selected_contract_id %}&contract_id={{ selected_contract_id }}{% endif %}"
