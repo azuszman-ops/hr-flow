@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% block title %}Grafiki — {{ tenant.name }}{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-gray-800">Zebrane grafiki — {{ tenant.name }}</h1>
+    <span class="text-sm text-gray-400">{{ submissions|length }} wypełnionych</span>
+</div>
+
+<div class="space-y-4">
+    {% for sub in submissions %}
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <span class="font-semibold text-gray-800">
+                    {{ sub.employee.first_name }} {{ sub.employee.last_name }}
+                </span>
+                <span class="ml-2 text-sm text-gray-500">
+                    {{ month_names.get(sub.month, sub.month) }} {{ sub.year }}
+                </span>
+            </div>
+            <span class="text-xs text-gray-400">
+                Wypełniono: {{ sub.submitted_at.strftime('%d.%m.%Y %H:%M') }}
+            </span>
+        </div>
+
+        <!-- Mini kalendarz -->
+        <div class="flex flex-wrap gap-1">
+            {% for day in sub.days %}
+            <div class="text-xs px-2 py-1 rounded
+                {% if day.status.value == 'available' %}bg-green-100 text-green-700
+                {% elif day.status.value == 'partial' %}bg-yellow-100 text-yellow-700
+                {% else %}bg-gray-100 text-gray-400{% endif %}"
+                title="{{ day.date.strftime('%d.%m') }} — {{ day.status.value }}{% if day.hour_from %} {{ day.hour_from }}-{{ day.hour_to }}{% endif %}">
+                {{ day.date.day }}
+                {% if day.status.value == 'partial' and day.hour_from %}
+                <span class="text-[10px]">{{ day.hour_from }}</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if sub.notes %}
+        <div class="mt-2 text-xs text-gray-500 italic">{{ sub.notes }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% if not submissions %}
+    <div class="text-center text-gray-400 text-sm py-8">Brak wypełnionych grafików.</div>
+    {% endif %}
+</div>
+
+{% endblock %}

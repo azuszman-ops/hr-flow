@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HR-Flow{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
+    <span class="font-bold text-blue-700 text-lg">HR-Flow</span>
+    {% if tenant is defined and tenant %}
+    <a href="/admin/{{ tenant.id }}/contracts" class="text-sm text-gray-600 hover:text-blue-600">Kontrakty</a>
+    <a href="/admin/{{ tenant.id }}/employees" class="text-sm text-gray-600 hover:text-blue-600">Pracownicy</a>
+    <a href="/admin/{{ tenant.id }}/campaigns" class="text-sm text-gray-600 hover:text-blue-600">Kampanie</a>
+    <a href="/admin/{{ tenant.id }}/schedules" class="text-sm text-gray-600 hover:text-blue-600">Grafiki</a>
+    <span class="ml-auto text-xs text-gray-400">{{ tenant.name }}</span>
+    {% endif %}
+    <a href="/" class="text-xs text-gray-400 hover:text-gray-600 {% if tenant is not defined %}ml-auto{% endif %}">↩ Wszyscy klienci</a>
+</nav>
+
+<main class="max-w-6xl mx-auto px-6 py-8">
+    {% block content %}{% endblock %}
+</main>
+</body>
+</html>

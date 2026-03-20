@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafik — {{ month_name }} {{ year }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+<div class="max-w-2xl mx-auto px-4 py-8" x-data="scheduleApp()">
+
+    <div class="text-center mb-8">
+        <div class="text-2xl font-bold text-gray-800">Cześć, {{ employee.first_name }}! 👋</div>
+        <div class="text-gray-500 mt-1">Uzupełnij swoją dostępność na <strong>{{ month_name }} {{ year }}</strong>.</div>
+        {% if existing %}
+        <div class="mt-2 text-sm text-amber-600 bg-amber-50 rounded-lg px-4 py-2 inline-block">
+            Grafik był już wypełniony — możesz go teraz zaktualizować.
+        </div>
+        {% endif %}
+    </div>
+
+    <form method="post" action="/schedule/{{ employee.token }}">
+
+        <!-- Przyciski szybkiego wyboru -->
+        <div class="bg-white border border-gray-200 rounded-xl p-4 mb-4 flex flex-wrap gap-2">
+            <span class="text-sm text-gray-500 w-full mb-1 font-medium">Szybki wybór:</span>
+            <button type="button" @click="setAll('available')"
+                    class="text-sm bg-green-100 text-green-700 rounded-lg px-3 py-1.5 hover:bg-green-200 transition">
+                ✅ Wszystkie dni — dostępny
+            </button>
+            <button type="button" @click="setAll('unavailable')"
+                    class="text-sm bg-gray-100 text-gray-600 rounded-lg px-3 py-1.5 hover:bg-gray-200 transition">
+                ❌ Niedostępny w tym miesiącu
+            </button>
+            <button type="button" @click="setWeekdays('available')"
+                    class="text-sm bg-blue-100 text-blue-700 rounded-lg px-3 py-1.5 hover:bg-blue-200 transition">
+                📅 Tylko dni robocze
+            </button>
+        </div>
+
+        <!-- Legenda -->
+        <div class="flex gap-3 mb-4 text-xs text-gray-500">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-green-200 inline-block"></span> Dostępny</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-200 inline-block"></span> Częściowo</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-gray-200 inline-block"></span> Niedostępny</span>
+        </div>
+
+        <!-- Kalendarz dni -->
+        <div class="space-y-2">
+            {% for day in days %}
+            {% set iso = day.isoformat() %}
+            {% set day_num = day.day %}
+            {% set weekday = day.weekday() %}  {# 0=pon, 6=niedz #}
+            <div class="bg-white border border-gray-200 rounded-xl p-3"
+                 :class="days['{{ iso }}'] === 'unavailable' ? 'opacity-50' : ''"
+                 x-data>
+                <div class="flex items-center gap-3">
+                    <!-- Data -->
+                    <div class="w-16 text-sm font-medium text-gray-700 shrink-0">
+                        {{ day.strftime('%d %b') }}
+                        <div class="text-xs text-gray-400">
+                            {{ ['pon','wt','śr','czw','pt','sob','niedz'][weekday] }}
+                        </div>
+                    </div>
+
+                    <!-- Status buttons -->
+                    <div class="flex gap-2 flex-1">
+                        <label class="flex-1">
+                            <input type="radio" name="day_{{ day_num }}" value="available"
+                                   x-model="days['{{ iso }}']"
+                                   {% if existing_days.get(iso, {}).get('status', 'available') == 'available' %}checked{% elif not existing_days %}checked{% endif %}
+                                   class="sr-only peer">
+                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                        border-gray-200 text-gray-400
+                                        peer-checked:bg-green-100 peer-checked:border-green-400 peer-checked:text-green-700 peer-checked:font-medium">
+                                Dostępny
+                            </div>
+                        </label>
+                        <label class="flex-1">
+                            <input type="radio" name="day_{{ day_num }}" value="partial"
+                                   x-model="days['{{ iso }}']"
+                                   {% if existing_days.get(iso, {}).get('status') == 'partial' %}checked{% endif %}
+                                   class="sr-only peer">
+                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                        border-gray-200 text-gray-400
+                                        peer-checked:bg-yellow-100 peer-checked:border-yellow-400 peer-checked:text-yellow-700 peer-checked:font-medium">
+                                Częściowo
+                            </div>
+                        </label>
+                        <label class="flex-1">
+                            <input type="radio" name="day_{{ day_num }}" value="unavailable"
+                                   x-model="days['{{ iso }}']"
+                                   {% if existing_days.get(iso, {}).get('status') == 'unavailable' %}checked{% endif %}
+                                   class="sr-only peer">
+                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                        border-gray-200 text-gray-400
+                                        peer-checked:bg-gray-100 peer-checked:border-gray-400 peer-checked:text-gray-600 peer-checked:font-medium">
+                                Niedostępny
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Godziny (tylko przy partial) -->
+                    <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-1 items-center shrink-0">
+                        <input type="time" name="from_{{ day_num }}"
+                               value="{{ existing_days.get(iso, {}).get('from', '08:00') }}"
+                               class="border border-gray-300 rounded px-2 py-1 text-xs w-20">
+                        <span class="text-gray-400 text-xs">–</span>
+                        <input type="time" name="to_{{ day_num }}"
+                               value="{{ existing_days.get(iso, {}).get('to', '16:00') }}"
+                               class="border border-gray-300 rounded px-2 py-1 text-xs w-20">
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Uwagi -->
+        <div class="mt-4 bg-white border border-gray-200 rounded-xl p-4">
+            <label class="text-sm text-gray-500 block mb-2">Uwagi (opcjonalnie)</label>
+            <textarea name="notes" rows="2" placeholder="Np. w tygodniu 10-14 mogę tylko po południu..."
+                      class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+        </div>
+
+        <button type="submit"
+                class="mt-6 w-full bg-blue-600 text-white rounded-xl py-3 text-base font-semibold hover:bg-blue-700 transition">
+            Wyślij grafik ✅
+        </button>
+    </form>
+</div>
+
+<script>
+function scheduleApp() {
+    // Stan początkowy z istniejących danych
+    const existing = {{ existing_days | tojson }};
+    const days_data = {};
+
+    {% for day in days %}
+    const iso_{{ day.day }} = '{{ day.isoformat() }}';
+    days_data[iso_{{ day.day }}] = existing[iso_{{ day.day }}]?.status || 'available';
+    {% endfor %}
+
+    return {
+        days: days_data,
+
+        setAll(status) {
+            Object.keys(this.days).forEach(k => this.days[k] = status);
+            // Sync radio buttons
+            document.querySelectorAll('input[type=radio]').forEach(r => {
+                r.checked = r.value === status;
+            });
+        },
+
+        setWeekdays(status) {
+            const weekdays = {{ days | map(attribute='isoformat') | list | tojson }};
+            const weekdayNums = {{ days | map(attribute='weekday') | list | tojson }};
+            weekdays.forEach((iso, idx) => {
+                const wd = weekdayNums[idx];
+                const newStatus = wd < 5 ? status : 'unavailable';
+                this.days[iso] = newStatus;
+            });
+            // Sync radio buttons
+            weekdays.forEach((iso, idx) => {
+                const wd = weekdayNums[idx];
+                const day_num = idx + 1;
+                const target = wd < 5 ? status : 'unavailable';
+                const radio = document.querySelector(`input[name=day_${day_num}][value=${target}]`);
+                if (radio) radio.checked = true;
+            });
+        }
+    };
+}
+</script>
+</body>
+</html>

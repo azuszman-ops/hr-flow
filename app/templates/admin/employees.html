@@ -1,0 +1,82 @@
+{% extends "admin/base.html" %}
+{% block title %}Pracownicy — {{ tenant.name }}{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-gray-800">Pracownicy — {{ tenant.name }}</h1>
+    <span class="text-sm text-gray-400">{{ employees|length }} osób</span>
+</div>
+
+<!-- Formularz dodawania -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-8" x-data="{open: false}">
+    <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">
+        + Dodaj pracownika
+    </button>
+    <form x-show="open" method="post" action="/admin/{{ tenant.id }}/employees"
+          class="mt-4 grid grid-cols-2 gap-3" x-cloak>
+        <input name="first_name" placeholder="Imię *" required
+               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input name="last_name" placeholder="Nazwisko *" required
+               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input name="phone_whatsapp" placeholder="WhatsApp (+48...)"
+               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input name="phone_viber" placeholder="Viber (+48...)"
+               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <input name="email" placeholder="Email" type="email"
+               class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <select name="contract_id"
+                class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <option value="">-- Kontrakt (opcjonalnie) --</option>
+            {% for c in contracts %}
+            <option value="{{ c.id }}">{{ c.name }}</option>
+            {% endfor %}
+        </select>
+        <div class="col-span-2">
+            <button type="submit"
+                    class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
+                Dodaj
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Lista pracowników -->
+<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <tr>
+                <th class="px-4 py-3 text-left">Pracownik</th>
+                <th class="px-4 py-3 text-left">WhatsApp</th>
+                <th class="px-4 py-3 text-left">Viber</th>
+                <th class="px-4 py-3 text-left">Email</th>
+                <th class="px-4 py-3 text-left">Link grafiku</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for emp in employees %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 font-medium text-gray-800">{{ emp.first_name }} {{ emp.last_name }}</td>
+                <td class="px-4 py-3 text-gray-500">{{ emp.phone_whatsapp or "—" }}</td>
+                <td class="px-4 py-3 text-gray-500">{{ emp.phone_viber or "—" }}</td>
+                <td class="px-4 py-3 text-gray-500">{{ emp.email or "—" }}</td>
+                <td class="px-4 py-3">
+                    <a href="/schedule/{{ emp.token }}" target="_blank"
+                       class="text-blue-500 hover:underline text-xs">Otwórz link</a>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <form method="post" action="/admin/{{ tenant.id }}/employees/{{ emp.id }}/delete"
+                          onsubmit="return confirm('Usunąć {{ emp.first_name }}?')">
+                        <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not employees %}
+    <div class="px-4 py-8 text-center text-gray-400 text-sm">Brak pracowników. Dodaj pierwszego powyżej.</div>
+    {% endif %}
+</div>
+
+{% endblock %}

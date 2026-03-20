@@ -1,0 +1,59 @@
+{% extends "admin/base.html" %}
+{% block title %}Kontrakty — {{ tenant.name }}{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-xl font-bold text-gray-800">Kontrakty — {{ tenant.name }}</h1>
+</div>
+
+<!-- Formularz dodawania -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-8" x-data="{open: false}">
+    <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">
+        + Dodaj kontrakt
+    </button>
+    <form x-show="open" method="post" action="/admin/{{ tenant.id }}/contracts" class="mt-4 space-y-3" x-cloak>
+        <input name="name" placeholder="Nazwa kontraktu (np. Magazyn XYZ — Warszawa)" required
+               class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <textarea name="description" placeholder="Opis (opcjonalnie)" rows="2"
+                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
+        <button type="submit"
+                class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
+            Dodaj
+        </button>
+    </form>
+</div>
+
+<!-- Lista kontraktów -->
+<div class="space-y-4">
+    {% for contract in contracts %}
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="flex items-start justify-between">
+            <div>
+                <div class="font-semibold text-gray-800">{{ contract.name }}</div>
+                {% if contract.description %}
+                <div class="text-sm text-gray-400 mt-1">{{ contract.description }}</div>
+                {% endif %}
+            </div>
+            <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/delete"
+                  onsubmit="return confirm('Usunąć kontrakt {{ contract.name }}?')">
+                <button type="submit" class="text-red-400 hover:text-red-600 text-xs ml-4">Usuń</button>
+            </form>
+        </div>
+        <div class="mt-3 text-xs text-gray-500">
+            Pracownicy: <strong>{{ contract.employee_links|length }}</strong>
+            {% if contract.employee_links %}
+            —
+            {% for link in contract.employee_links[:5] %}
+                {{ link.employee.first_name }} {{ link.employee.last_name }}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+            {% if contract.employee_links|length > 5 %}… i {{ contract.employee_links|length - 5 }} więcej{% endif %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+    {% if not contracts %}
+    <div class="text-center text-gray-400 text-sm py-8">Brak kontraktów. Dodaj pierwszy powyżej.</div>
+    {% endif %}
+</div>
+
+{% endblock %}
