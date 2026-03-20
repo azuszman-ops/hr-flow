@@ -6,6 +6,12 @@
     <h1 class="text-xl font-bold text-gray-800">Kampanie wysyłkowe — {{ tenant.name }}</h1>
 </div>
 
+{% if request.query_params.get('error') == 'exists' %}
+<div class="bg-amber-50 border border-amber-300 text-amber-700 rounded-xl px-4 py-3 mb-4 text-sm">
+    Kampania na ten miesiąc już istnieje — możesz ją wysłać ponownie poniżej.
+</div>
+{% endif %}
+
 <!-- Nowa kampania -->
 <div class="bg-white border border-gray-200 rounded-xl p-5 mb-8">
     <h2 class="font-semibold text-gray-700 mb-3">Utwórz kampanię na miesiąc</h2>
@@ -47,18 +53,16 @@
                 </span>
             </div>
             <div class="flex gap-3 items-center">
-                {% if camp.status.value == 'pending' %}
                 <button
-                    @click="sending = true;
+                    @click="sending = true; result = null;
                             fetch('/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/send', {method:'POST'})
                             .then(r => r.json())
                             .then(d => { result = d; sending = false; })"
                     :disabled="sending"
-                    class="bg-green-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
-                    <span x-show="!sending">Wyślij wiadomości</span>
+                    class="{% if camp.status.value == 'sent' %}bg-gray-500 hover:bg-gray-600{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white rounded-lg px-4 py-1.5 text-sm font-medium transition disabled:opacity-50">
+                    <span x-show="!sending">{% if camp.status.value == 'sent' %}Wyślij ponownie{% else %}Wyślij wiadomości{% endif %}</span>
                     <span x-show="sending">Wysyłanie…</span>
                 </button>
-                {% endif %}
             </div>
         </div>
         <div x-show="result" class="mt-3 text-sm">

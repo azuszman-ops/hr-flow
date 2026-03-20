@@ -179,7 +179,8 @@ async def create_campaign(
         campaign = MessageCampaign(tenant_id=tenant_id, year=year, month=month)
         db.add(campaign)
         await db.commit()
-    return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
+        return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
+    return RedirectResponse(f"/admin/{tenant_id}/campaigns?error=exists", status_code=303)
 
 
 @router.post("/admin/{tenant_id}/campaigns/{campaign_id}/send")
