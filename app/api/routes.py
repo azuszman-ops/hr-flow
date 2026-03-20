@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from datetime import date, datetime, timedelta
+from typing import List, Optional
 import calendar
 
 
@@ -51,7 +52,8 @@ from app.database import get_db
 from app.models import (
     Tenant, Contract, Employee, ContractEmployee,
     ScheduleSubmission, AvailabilityDay, AvailabilityStatus,
-    MessageTemplate, MessageCampaign, MessageLog, MessageChannel, CampaignStatus
+    MessageTemplate, MessageCampaign, MessageLog, MessageChannel, CampaignStatus,
+    TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE,
 )
 from app.services.messaging import (
     send_whatsapp, render_template, MONTH_NAMES_PL, build_schedule_link
@@ -112,6 +114,92 @@ async def delete_contract(tenant_id: int, contract_id: int, db: AsyncSession = D
         await db.delete(contract)
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
+
+
+@router.get("/admin/{tenant_id}/contracts/{contract_id}", response_class=HTMLResponse)
+async def contract_detail(
+    request: Request, tenant_id: int, contract_id: int, db: AsyncSession = Depends(get_db)
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    contract = (
+        await db.execute(
+            select(Contract)
+            .where(Contract.id == contract_id, Contract.tenant_id == tenant_id)
+            .options(selectinload(Contract.employee_links).selectinload(ContractEmployee.employee))
+        )
+    ).scalar_one_or_none()
+    if not contract:
+        raise HTTPException(404)
+
+    assigned_employee_ids = {link.employee_id for link in contract.employee_links}
+    assigned_employees = [link.employee for link in contract.employee_links]
+
+    all_employees = (
+        await db.execute(
+            select(Employee)
+            .where(Employee.tenant_id == tenant_id)
+            .order_by(Employee.last_name, Employee.first_name)
+        )
+    ).scalars().all()
+
+    available_employees = [e for e in all_employees if e.id not in assigned_employee_ids]
+
+    return templates.TemplateResponse("admin/contract_detail.html", {
+        "request": request,
+        "tenant": tenant,
+        "contract": contract,
+        "assigned_employees": assigned_employees,
+        "available_employees": available_employees,
+    })
+
+
+@router.post("/admin/{tenant_id}/contracts/{contract_id}/add_employee")
+async def add_employee_to_contract(
+    tenant_id: int,
+    contract_id: int,
+    employee_id: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    contract = await db.get(Contract, contract_id)
+    if not contract or contract.tenant_id != tenant_id:
+        raise HTTPException(404)
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+    # Sprawdź czy już przypisany
+    existing = (await db.execute(
+        select(ContractEmployee).where(
+            ContractEmployee.contract_id == contract_id,
+            ContractEmployee.employee_id == employee_id,
+        )
+    )).scalar_one_or_none()
+    if not existing:
+        link = ContractEmployee(contract_id=contract_id, employee_id=employee_id)
+        db.add(link)
+        await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/contracts/{contract_id}", status_code=303)
+
+
+@router.post("/admin/{tenant_id}/contracts/{contract_id}/remove_employee/{employee_id}")
+async def remove_employee_from_contract(
+    tenant_id: int,
+    contract_id: int,
+    employee_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    contract = await db.get(Contract, contract_id)
+    if not contract or contract.tenant_id != tenant_id:
+        raise HTTPException(404)
+    await db.execute(
+        delete(ContractEmployee).where(
+            ContractEmployee.contract_id == contract_id,
+            ContractEmployee.employee_id == employee_id,
+        )
+    )
+    await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/contracts/{contract_id}", status_code=303)
 
 
 # ============================================================
@@ -175,6 +263,44 @@ async def delete_employee(tenant_id: int, employee_id: int, db: AsyncSession = D
     return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
 
 
+@router.get("/admin/{tenant_id}/employees/{employee_id}/edit", response_class=HTMLResponse)
+async def edit_employee_form(
+    request: Request, tenant_id: int, employee_id: int, db: AsyncSession = Depends(get_db)
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+    return templates.TemplateResponse("admin/employee_edit.html", {
+        "request": request, "tenant": tenant, "employee": emp
+    })
+
+
+@router.post("/admin/{tenant_id}/employees/{employee_id}/edit")
+async def edit_employee(
+    tenant_id: int,
+    employee_id: int,
+    first_name: str = Form(...),
+    last_name: str = Form(...),
+    phone_whatsapp: str = Form(""),
+    phone_viber: str = Form(""),
+    email: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+):
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+    emp.first_name = first_name
+    emp.last_name = last_name
+    emp.phone_whatsapp = phone_whatsapp or None
+    emp.phone_viber = phone_viber or None
+    emp.email = email or None
+    await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
+
+
 # ============================================================
 # ADMIN — Kampanie / Wysyłka
 # ============================================================
@@ -194,10 +320,15 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
     employees = (
         await db.execute(select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True))
     ).scalars().all()
+    contracts = (
+        await db.execute(
+            select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
+        )
+    ).scalars().all()
     now = datetime.now()
     return templates.TemplateResponse("admin/campaigns.html", {
         "request": request, "tenant": tenant, "campaigns": campaigns,
-        "employees": employees, "now": now, "month_names": MONTH_NAMES_PL
+        "employees": employees, "contracts": contracts, "now": now, "month_names": MONTH_NAMES_PL
     })
 
 
@@ -224,24 +355,57 @@ async def create_campaign(
 
 
 @router.post("/admin/{tenant_id}/campaigns/{campaign_id}/send")
-async def send_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = Depends(get_db)):
-    """Wysyła wiadomości WhatsApp do wszystkich aktywnych pracowników tenanta."""
+async def send_campaign(
+    request: Request,
+    tenant_id: int,
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Wysyła wiadomości WhatsApp do aktywnych pracowników (opcjonalnie filtrowanych po kontraktach)."""
     campaign = await db.get(MessageCampaign, campaign_id)
     if not campaign or campaign.tenant_id != tenant_id:
         raise HTTPException(404)
 
-    employees = (
+    # Odczytaj contract_ids z form data (może być wiele wartości)
+    form = await request.form()
+    raw_contract_ids = form.getlist("contract_ids")
+    contract_ids: List[int] = [int(c) for c in raw_contract_ids if c]
+
+    if contract_ids:
+        # Pobierz pracowników przypisanych do wybranych kontraktów
+        rows = (
+            await db.execute(
+                select(Employee)
+                .join(ContractEmployee, ContractEmployee.employee_id == Employee.id)
+                .where(
+                    Employee.tenant_id == tenant_id,
+                    Employee.is_active == True,
+                    ContractEmployee.contract_id.in_(contract_ids),
+                )
+                .distinct()
+            )
+        ).scalars().all()
+        employees = rows
+    else:
+        # Wszyscy aktywni pracownicy tenanta
+        employees = (
+            await db.execute(
+                select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+            )
+        ).scalars().all()
+
+    # Pobierz ustawienia tenanta (szablon wiadomości)
+    tenant_settings = (
         await db.execute(
-            select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+            select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
         )
-    ).scalars().all()
+    ).scalar_one_or_none()
 
     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
     message_template = (
-        f"Dzień dobry {{first_name}}! 👋\n\n"
-        f"Prosimy o uzupełnienie grafiku dostępności na {month_name} {campaign.year}.\n\n"
-        f"Kliknij link poniżej i zajmie to tylko chwilę:\n{{schedule_link}}\n\n"
-        f"Dziękujemy!"
+        tenant_settings.initial_message
+        if tenant_settings
+        else DEFAULT_INITIAL_MESSAGE
     )
 
     sent, failed = 0, 0
@@ -270,6 +434,67 @@ async def send_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = Dep
     await db.commit()
 
     return JSONResponse({"sent": sent, "failed": failed})
+
+
+# ============================================================
+# ADMIN — Ustawienia
+# ============================================================
+
+@router.get("/admin/{tenant_id}/settings", response_class=HTMLResponse)
+async def admin_settings(
+    request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    settings = (
+        await db.execute(
+            select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if not settings:
+        settings = TenantSettings(
+            tenant_id=tenant_id,
+            initial_message=DEFAULT_INITIAL_MESSAGE,
+            reminder_message=DEFAULT_REMINDER_MESSAGE,
+            reminder_days=3,
+        )
+    saved = request.query_params.get("saved") == "1"
+    return templates.TemplateResponse("admin/settings.html", {
+        "request": request, "tenant": tenant, "settings": settings, "saved": saved
+    })
+
+
+@router.post("/admin/{tenant_id}/settings")
+async def save_settings(
+    tenant_id: int,
+    initial_message: str = Form(...),
+    reminder_message: str = Form(...),
+    reminder_days: int = Form(3),
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    settings = (
+        await db.execute(
+            select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
+        )
+    ).scalar_one_or_none()
+    if settings:
+        settings.initial_message = initial_message
+        settings.reminder_message = reminder_message
+        settings.reminder_days = reminder_days
+    else:
+        settings = TenantSettings(
+            tenant_id=tenant_id,
+            initial_message=initial_message,
+            reminder_message=reminder_message,
+            reminder_days=reminder_days,
+        )
+        db.add(settings)
+    await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/settings?saved=1", status_code=303)
 
 
 # ============================================================

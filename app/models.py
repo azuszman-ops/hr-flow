@@ -189,3 +189,32 @@ class MessageLog(Base):
 
     campaign = relationship("MessageCampaign", back_populates="logs")
     employee = relationship("Employee", back_populates="message_logs")
+
+
+# ---------------------------------------------------------------------------
+# TenantSettings — ustawienia tenanta (szablony wiadomości, przypomnienia)
+# ---------------------------------------------------------------------------
+DEFAULT_INITIAL_MESSAGE = (
+    "Dzień dobry {first_name}! 👋\n\n"
+    "Prosimy o uzupełnienie grafiku dostępności na {month_name}.\n\n"
+    "Link: {schedule_link}\n\n"
+    "Dziękujemy!"
+)
+
+DEFAULT_REMINDER_MESSAGE = (
+    "Dzień dobry {first_name}, przypominamy o uzupełnieniu grafiku na {month_name}.\n\n"
+    "Link: {schedule_link}"
+)
+
+
+class TenantSettings(Base):
+    __tablename__ = "tenant_settings"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), unique=True, nullable=False)
+    initial_message = Column(Text, nullable=False, default=DEFAULT_INITIAL_MESSAGE)
+    reminder_message = Column(Text, nullable=False, default=DEFAULT_REMINDER_MESSAGE)
+    reminder_days = Column(Integer, nullable=False, default=3)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    tenant = relationship("Tenant")

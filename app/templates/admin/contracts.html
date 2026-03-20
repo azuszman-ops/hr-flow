@@ -29,7 +29,8 @@
     <div class="bg-white border border-gray-200 rounded-xl p-5">
         <div class="flex items-start justify-between">
             <div>
-                <div class="font-semibold text-gray-800">{{ contract.name }}</div>
+                <a href="/admin/{{ tenant.id }}/contracts/{{ contract.id }}"
+                   class="font-semibold text-gray-800 hover:text-blue-600 hover:underline">{{ contract.name }}</a>
                 {% if contract.description %}
                 <div class="text-sm text-gray-400 mt-1">{{ contract.description }}</div>
                 {% endif %}
