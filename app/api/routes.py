@@ -4,8 +4,48 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import calendar
+
+
+def get_easter(year: int) -> date:
+    """Algorytm Anonymous Gregorian — oblicza datę Wielkanocy."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def get_polish_holidays(year: int) -> dict:
+    """Zwraca słownik {date: nazwa_święta} polskich dni wolnych."""
+    easter = get_easter(year)
+    holidays = {
+        date(year, 1, 1): "Nowy Rok",
+        date(year, 1, 6): "Trzech Króli",
+        easter: "Wielkanoc",
+        easter + timedelta(days=1): "Poniedziałek Wielkanocny",
+        date(year, 5, 1): "Święto Pracy",
+        date(year, 5, 3): "Święto Konstytucji 3 Maja",
+        easter + timedelta(days=49): "Zielone Świątki",
+        easter + timedelta(days=60): "Boże Ciało",
+        date(year, 8, 15): "Wniebowzięcie NMP",
+        date(year, 11, 1): "Wszystkich Świętych",
+        date(year, 11, 11): "Święto Niepodległości",
+        date(year, 12, 25): "Boże Narodzenie",
+        date(year, 12, 26): "Drugi dzień Bożego Narodzenia",
+    }
+    return holidays
 
 from app.database import get_db
 from app.models import (
@@ -288,6 +328,8 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
     days = [date(year, month, d) for d in range(1, num_days + 1)]
     days_iso = [d.isoformat() for d in days]
     days_weekday = [d.weekday() for d in days]
+    holidays = get_polish_holidays(year)
+    holidays_iso = {d.isoformat(): name for d, name in holidays.items() if d.month == month}
 
     existing_days = {}
     if existing:
@@ -301,6 +343,7 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
         "month": month,
         "days_iso": days_iso,
         "days_weekday": days_weekday,
+        "holidays_iso": holidays_iso,
         "month_name": MONTH_NAMES_PL.get(month, ""),
         "days": days,
         "existing": existing,

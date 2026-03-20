@@ -12,7 +12,10 @@
 
     <div class="text-center mb-8">
         <div class="text-2xl font-bold text-gray-800">Cześć, {{ employee.first_name }}! 👋</div>
-        <div class="text-gray-500 mt-1">Uzupełnij swoją dostępność na <strong>{{ month_name }} {{ year }}</strong>.</div>
+        <div class="mt-2 inline-block bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold text-lg">
+            📅 Kalendarz na {{ month_name }} {{ year }}
+        </div>
+        <div class="text-gray-500 mt-2 text-sm">Zaznacz dni, w których jesteś dostępny do pracy.</div>
         {% if existing %}
         <div class="mt-2 text-sm text-amber-600 bg-amber-50 rounded-lg px-4 py-2 inline-block">
             Grafik był już wypełniony — możesz go teraz zaktualizować.
@@ -51,21 +54,30 @@
             {% for day in days %}
             {% set iso = day.isoformat() %}
             {% set day_num = day.day %}
-            {% set weekday = day.weekday() %}  {# 0=pon, 6=niedz #}
-            <div class="bg-white border border-gray-200 rounded-xl p-3"
-                 :class="days['{{ iso }}'] === 'unavailable' ? 'opacity-50' : ''"
+            {% set weekday = day.weekday() %}
+            {% set holiday_name = holidays_iso.get(iso) %}
+            {% set is_holiday = holiday_name is not none %}
+            <div class="{% if is_holiday %}bg-red-50 border border-red-200{% else %}bg-white border border-gray-200{% endif %} rounded-xl p-3
+                        {% if is_holiday %}opacity-75{% endif %}"
+                 :class="!{{ 'true' if is_holiday else 'false' }} && days['{{ iso }}'] === 'unavailable' ? 'opacity-50' : ''"
                  x-data>
                 <div class="flex flex-col gap-2">
                     <div class="flex items-center gap-3">
                         <!-- Data -->
-                        <div class="w-16 text-sm font-medium text-gray-700 shrink-0">
+                        <div class="w-16 text-sm font-medium {% if is_holiday %}text-red-500{% else %}text-gray-700{% endif %} shrink-0">
                             {{ day.strftime('%d %b') }}
-                            <div class="text-xs text-gray-400">
+                            <div class="text-xs {% if is_holiday %}text-red-400{% else %}text-gray-400{% endif %}">
                                 {{ ['pon','wt','śr','czw','pt','sob','niedz'][weekday] }}
                             </div>
                         </div>
 
-                        <!-- Status buttons -->
+                        <!-- Status buttons / Święto -->
+                        {% if is_holiday %}
+                        <div class="flex-1">
+                            <input type="hidden" name="day_{{ day_num }}" value="unavailable">
+                            <div class="text-xs text-red-500 font-medium">🎉 {{ holiday_name }} — dzień wolny</div>
+                        </div>
+                        {% else %}
                         <div class="flex gap-2 flex-1">
                             <label class="flex-1">
                                 <input type="radio" name="day_{{ day_num }}" value="available"
@@ -101,9 +113,11 @@
                                 </div>
                             </label>
                         </div>
+                        {% endif %}
                     </div>
 
-                    <!-- Godziny (tylko przy partial) — osobna linia na mobile -->
+                    <!-- Godziny (tylko przy partial, nie dla świąt) -->
+                    {% if not is_holiday %}
                     <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-2 items-center ml-[76px]">
                         <span class="text-xs text-gray-500">od</span>
                         <input type="time" name="from_{{ day_num }}"
@@ -123,6 +137,7 @@
                                oninput="this.setCustomValidity('')"
                                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1">
                     </div>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -148,9 +163,11 @@ function scheduleApp() {
     const existing = {{ existing_days | tojson }};
     const days_data = {};
 
+    const holidays = {{ holidays_iso | tojson }};
+
     {% for day in days %}
     const iso_{{ day.day }} = '{{ day.isoformat() }}';
-    days_data[iso_{{ day.day }}] = existing[iso_{{ day.day }}]?.status || 'available';
+    days_data[iso_{{ day.day }}] = holidays[iso_{{ day.day }}] ? 'unavailable' : (existing[iso_{{ day.day }}]?.status || 'available');
     {% endfor %}
 
     return {
