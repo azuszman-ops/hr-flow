@@ -38,6 +38,8 @@ async def send_whatsapp(to_phone: str, message: str) -> dict:
     Wysyła wiadomość WhatsApp przez Twilio.
     to_phone format: +48XXXXXXXXX
     """
+    print(f"[WHATSAPP] Sending to {to_phone} from {TWILIO_WHATSAPP_FROM}")
+    print(f"[WHATSAPP] SID: {TWILIO_SID[:8] if TWILIO_SID else 'MISSING'}...")
     try:
         client = get_twilio()
         msg = client.messages.create(
@@ -45,8 +47,10 @@ async def send_whatsapp(to_phone: str, message: str) -> dict:
             from_=TWILIO_WHATSAPP_FROM,
             to=f"whatsapp:{to_phone}",
         )
+        print(f"[WHATSAPP] Success: {msg.sid}")
         return {"status": "sent", "external_id": msg.sid}
     except Exception as e:
+        print(f"[WHATSAPP] ERROR: {e}")
         return {"status": "failed", "error": str(e)}
 
 
