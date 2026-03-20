@@ -10,7 +10,7 @@
 <body class="bg-gray-50 min-h-screen">
 
 <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
-    <a href="/" class="font-bold text-blue-700 text-lg hover:text-blue-800">HR-Flow</a>
+    <a href="{% if tenant is defined and tenant %}/admin/{{ tenant.id }}{% else %}/{% endif %}" class="font-bold text-blue-700 text-lg hover:text-blue-800">HR-Flow</a>
     {% if tenant is defined and tenant %}
     <a href="/admin/{{ tenant.id }}" class="text-sm text-gray-600 hover:text-blue-600 font-medium">Przegląd</a>
     <a href="/admin/{{ tenant.id }}/calendar" class="text-sm text-gray-600 hover:text-blue-600">Kalendarz</a>

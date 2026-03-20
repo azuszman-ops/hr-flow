@@ -70,6 +70,9 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     tenants = (await db.execute(select(Tenant))).scalars().all()
+    # Jeśli jest dokładnie 1 tenant — przekieruj bezpośrednio do jego panelu
+    if len(tenants) == 1:
+        return RedirectResponse(f"/admin/{tenants[0].id}", status_code=302)
     return templates.TemplateResponse("admin/dashboard.html", {"request": request, "tenants": tenants})
 
 
