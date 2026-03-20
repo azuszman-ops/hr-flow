@@ -104,15 +104,23 @@
                     </div>
 
                     <!-- Godziny (tylko przy partial) — osobna linia na mobile -->
-                    <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-2 items-center pl-19 ml-[76px]">
+                    <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-2 items-center ml-[76px]">
                         <span class="text-xs text-gray-500">od</span>
                         <input type="time" name="from_{{ day_num }}"
                                value="{{ existing_days.get(iso, {}).get('from', '08:00') }}"
+                               :disabled="days['{{ iso }}'] !== 'partial'"
+                               :required="days['{{ iso }}'] === 'partial'"
+                               oninvalid="this.setCustomValidity('Podaj godzinę rozpoczęcia')"
+                               oninput="this.setCustomValidity('')"
                                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1">
                         <span class="text-gray-400 text-xs">–</span>
                         <span class="text-xs text-gray-500">do</span>
                         <input type="time" name="to_{{ day_num }}"
                                value="{{ existing_days.get(iso, {}).get('to', '16:00') }}"
+                               :disabled="days['{{ iso }}'] !== 'partial'"
+                               :required="days['{{ iso }}'] === 'partial'"
+                               oninvalid="this.setCustomValidity('Podaj godzinę zakończenia')"
+                               oninput="this.setCustomValidity('')"
                                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1">
                     </div>
                 </div>
