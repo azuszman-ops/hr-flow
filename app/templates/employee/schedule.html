@@ -153,8 +153,8 @@ function scheduleApp() {
         },
 
         setWeekdays(status) {
-            const weekdays = {{ days | map(attribute='isoformat') | list | tojson }};
-            const weekdayNums = {{ days | map(attribute='weekday') | list | tojson }};
+            const weekdays = {{ days_iso | tojson }};
+            const weekdayNums = {{ days_weekday | tojson }};
             weekdays.forEach((iso, idx) => {
                 const wd = weekdayNums[idx];
                 const newStatus = wd < 5 ? status : 'unavailable';

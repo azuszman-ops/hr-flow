@@ -286,6 +286,8 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
     # Dni miesiąca
     num_days = calendar.monthrange(year, month)[1]
     days = [date(year, month, d) for d in range(1, num_days + 1)]
+    days_iso = [d.isoformat() for d in days]
+    days_weekday = [d.weekday() for d in days]
 
     existing_days = {}
     if existing:
@@ -297,6 +299,8 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
         "employee": emp,
         "year": year,
         "month": month,
+        "days_iso": days_iso,
+        "days_weekday": days_weekday,
         "month_name": MONTH_NAMES_PL.get(month, ""),
         "days": days,
         "existing": existing,
