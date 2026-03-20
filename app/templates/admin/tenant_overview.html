@@ -1,0 +1,88 @@
+{% extends "admin/base.html" %}
+{% block title %}Przegląd — {{ tenant.name }}{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+    <div class="text-sm text-gray-400 mb-1">Panel klienta</div>
+    <h1 class="text-2xl font-bold text-gray-800">{{ tenant.name }}</h1>
+</div>
+
+<!-- Stats grid -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="text-3xl font-bold text-gray-800">{{ stats.total_employees }}</div>
+        <div class="text-sm text-gray-500 mt-1">Pracownicy</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="text-3xl font-bold text-gray-800">{{ stats.total_contracts }}</div>
+        <div class="text-sm text-gray-500 mt-1">Kontrakty</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="text-3xl font-bold {% if stats.submitted_pct >= 80 %}text-green-600{% elif stats.submitted_pct >= 50 %}text-yellow-600{% else %}text-red-500{% endif %}">
+            {{ stats.submitted_count }}/{{ stats.total_employees }}
+        </div>
+        <div class="text-sm text-gray-500 mt-1">Grafiki — {{ month_name }} {{ year }}</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="text-3xl font-bold {% if stats.submitted_pct >= 80 %}text-green-600{% elif stats.submitted_pct >= 50 %}text-yellow-600{% else %}text-red-500{% endif %}">
+            {{ stats.submitted_pct }}%
+        </div>
+        <div class="text-sm text-gray-500 mt-1">Kompletność</div>
+    </div>
+</div>
+
+<!-- Progress bar -->
+{% if stats.total_employees > 0 %}
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-8">
+    <div class="flex items-center justify-between mb-2">
+        <span class="text-sm font-medium text-gray-700">Postęp zbierania grafików — {{ month_name }} {{ year }}</span>
+        <span class="text-sm text-gray-500">{{ stats.submitted_count }} z {{ stats.total_employees }}</span>
+    </div>
+    <div class="w-full bg-gray-100 rounded-full h-3">
+        <div class="h-3 rounded-full transition-all
+            {% if stats.submitted_pct >= 80 %}bg-green-500{% elif stats.submitted_pct >= 50 %}bg-yellow-500{% else %}bg-red-400{% endif %}"
+             style="width: {{ stats.submitted_pct }}%"></div>
+    </div>
+    {% if stats.pending_count > 0 %}
+    <div class="mt-2 text-xs text-gray-400">Oczekuje na grafik: {{ stats.pending_count }} {% if stats.pending_count == 1 %}osoba{% elif stats.pending_count < 5 %}osoby{% else %}osób{% endif %}</div>
+    {% else %}
+    <div class="mt-2 text-xs text-green-600 font-medium">Wszyscy pracownicy wypełnili grafik!</div>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- Quick nav -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <a href="/admin/{{ tenant.id }}/calendar"
+       class="bg-blue-600 text-white rounded-xl p-5 hover:bg-blue-700 transition block">
+        <div class="text-lg font-semibold">📅 Kalendarz zarządczy</div>
+        <div class="text-sm mt-1 text-blue-100">Agregowany widok dostępności wszystkich pracowników</div>
+    </a>
+    <a href="/admin/{{ tenant.id }}/schedules"
+       class="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow transition block">
+        <div class="text-lg font-semibold text-gray-800">📋 Wypełnione grafiki</div>
+        <div class="text-sm mt-1 text-gray-500">Szczegóły każdego złożonego grafiku</div>
+    </a>
+    <a href="/admin/{{ tenant.id }}/campaigns"
+       class="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow transition block">
+        <div class="text-lg font-semibold text-gray-800">📨 Kampanie WhatsApp</div>
+        <div class="text-sm mt-1 text-gray-500">Wysyłka i status wiadomości</div>
+    </a>
+    <a href="/admin/{{ tenant.id }}/employees"
+       class="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow transition block">
+        <div class="text-lg font-semibold text-gray-800">👥 Pracownicy</div>
+        <div class="text-sm mt-1 text-gray-500">Zarządzanie bazą pracowników</div>
+    </a>
+    <a href="/admin/{{ tenant.id }}/contracts"
+       class="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow transition block">
+        <div class="text-lg font-semibold text-gray-800">📁 Kontrakty</div>
+        <div class="text-sm mt-1 text-gray-500">Zarządzanie kontraktami</div>
+    </a>
+    <a href="/admin/{{ tenant.id }}/settings"
+       class="bg-white border border-gray-200 rounded-xl p-5 hover:border-blue-400 hover:shadow transition block">
+        <div class="text-lg font-semibold text-gray-800">⚙️ Ustawienia</div>
+        <div class="text-sm mt-1 text-gray-500">Szablony wiadomości i konfiguracja</div>
+    </a>
+</div>
+
+{% endblock %}

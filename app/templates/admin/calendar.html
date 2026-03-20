@@ -1,0 +1,133 @@
+{% extends "admin/base.html" %}
+{% block title %}Kalendarz — {{ tenant.name }}{% endblock %}
+{% block content %}
+
+<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+    <div>
+        <h1 class="text-xl font-bold text-gray-800">Kalendarz zarządczy</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{{ month_name }} {{ year }} — {{ tenant.name }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2 items-center">
+        <!-- Filtr kontraktu -->
+        <form method="get" class="flex gap-2 items-center flex-wrap">
+            <input type="hidden" name="year" value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+            <select name="contract_id"
+                    onchange="this.form.submit()"
+                    class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                <option value="">Wszyscy pracownicy</option>
+                {% for c in contracts %}
+                <option value="{{ c.id }}" {% if selected_contract_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        <!-- Nawigacja miesiąc -->
+        <div class="flex gap-1">
+            <a href="?year={{ prev_year }}&month={{ prev_month }}{% if selected_contract_id %}&contract_id={{ selected_contract_id }}{% endif %}"
+               class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">← Poprzedni</a>
+            <a href="?year={{ next_year }}&month={{ next_month }}{% if selected_contract_id %}&contract_id={{ selected_contract_id }}{% endif %}"
+               class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Następny →</a>
+        </div>
+    </div>
+</div>
+
+<!-- Legenda -->
+<div class="flex gap-4 mb-4 text-xs text-gray-500 flex-wrap">
+    <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-green-200 border border-green-300 inline-block"></span> Dostępny cały dzień</span>
+    <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-yellow-200 border border-yellow-300 inline-block"></span> Częściowo dostępny</span>
+    <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-gray-200 border border-gray-300 inline-block"></span> Niedostępny</span>
+    <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-white border border-gray-200 inline-block"></span> Brak odpowiedzi</span>
+</div>
+
+{% if employees %}
+<!-- Stats summary -->
+<div class="grid grid-cols-3 gap-3 mb-6">
+    <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <div class="text-2xl font-bold text-gray-800">{{ employees|length }}</div>
+        <div class="text-xs text-gray-500 mt-1">{% if selected_contract_id %}W kontrakcie{% else %}Pracownicy{% endif %}</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <div class="text-2xl font-bold text-green-600">{{ submitted_count }}</div>
+        <div class="text-xs text-gray-500 mt-1">Wypełniło grafik</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
+        <div class="text-2xl font-bold text-gray-400">{{ employees|length - submitted_count }}</div>
+        <div class="text-xs text-gray-500 mt-1">Oczekuje</div>
+    </div>
+</div>
+
+<!-- Tabela kalendarza -->
+<div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
+    <table class="min-w-full text-xs border-collapse">
+        <thead>
+            <tr class="bg-gray-50 border-b border-gray-200">
+                <th class="sticky left-0 bg-gray-50 text-left px-3 py-2.5 font-semibold text-gray-700 border-r border-gray-200 whitespace-nowrap min-w-[140px]">
+                    Pracownik
+                </th>
+                {% for d in days %}
+                <th class="px-1 py-2.5 text-center font-medium min-w-[28px]
+                    {% if d.weekday() >= 5 %}text-red-400{% else %}text-gray-600{% endif %}
+                    {% if d.isoformat() in holidays_iso %}bg-red-50{% endif %}">
+                    <div>{{ d.day }}</div>
+                    <div class="text-gray-400 font-normal">{{ ['Pn','Wt','Śr','Cz','Pt','So','Nd'][d.weekday()] }}</div>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for emp in employees %}
+            {% set sub = submissions_by_emp.get(emp.id) %}
+            <tr class="hover:bg-gray-50 group">
+                <td class="sticky left-0 bg-white group-hover:bg-gray-50 px-3 py-2 border-r border-gray-200 whitespace-nowrap">
+                    <div class="font-medium text-gray-800">{{ emp.first_name }} {{ emp.last_name }}</div>
+                    {% if not sub %}
+                    <div class="text-gray-400 text-xs">brak odpowiedzi</div>
+                    {% else %}
+                    <div class="text-gray-400 text-xs">{{ sub.submitted_at.strftime('%d.%m %H:%M') }}</div>
+                    {% endif %}
+                </td>
+                {% for d in days %}
+                {% set iso = d.isoformat() %}
+                {% if d.isoformat() in holidays_iso %}
+                    <td class="px-0.5 py-1 text-center bg-red-50" title="{{ holidays_iso[iso] }}">
+                        <div class="w-6 h-6 mx-auto rounded flex items-center justify-center text-red-300 font-bold text-base">·</div>
+                    </td>
+                {% elif not sub %}
+                    <td class="px-0.5 py-1 text-center">
+                        <div class="w-6 h-6 mx-auto rounded border border-gray-100"></div>
+                    </td>
+                {% else %}
+                    {% set day_status = day_statuses.get(emp.id, {}).get(iso) %}
+                    {% if day_status == 'available' %}
+                    <td class="px-0.5 py-1 text-center" title="Dostępny">
+                        <div class="w-6 h-6 mx-auto rounded bg-green-200 border border-green-300"></div>
+                    </td>
+                    {% elif day_status == 'partial' %}
+                    {% set hours = day_hours.get(emp.id, {}).get(iso) %}
+                    <td class="px-0.5 py-1 text-center" title="Częściowo{% if hours %}: {{ hours }}{% endif %}">
+                        <div class="w-6 h-6 mx-auto rounded bg-yellow-200 border border-yellow-300 flex items-center justify-center text-yellow-600 font-bold text-xs">~</div>
+                    </td>
+                    {% elif day_status == 'unavailable' %}
+                    <td class="px-0.5 py-1 text-center" title="Niedostępny">
+                        <div class="w-6 h-6 mx-auto rounded bg-gray-100 border border-gray-200"></div>
+                    </td>
+                    {% else %}
+                    <td class="px-0.5 py-1 text-center">
+                        <div class="w-6 h-6 mx-auto rounded border border-gray-100"></div>
+                    </td>
+                    {% endif %}
+                {% endif %}
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% else %}
+<div class="text-center text-gray-400 text-sm py-16 bg-white border border-gray-200 rounded-xl">
+    {% if selected_contract_id %}Brak pracowników w tym kontrakcie.{% else %}Brak pracowników.{% endif %}
+</div>
+{% endif %}
+
+{% endblock %}

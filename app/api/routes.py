@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.orm import selectinload
 from datetime import date, datetime, timedelta
 from typing import List, Optional
@@ -71,6 +71,167 @@ templates = Jinja2Templates(directory="app/templates")
 async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
     tenants = (await db.execute(select(Tenant))).scalars().all()
     return templates.TemplateResponse("admin/dashboard.html", {"request": request, "tenants": tenants})
+
+
+# ============================================================
+# ADMIN — Tenant Overview
+# ============================================================
+
+@router.get("/admin/{tenant_id}", response_class=HTMLResponse)
+async def tenant_overview(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+
+    now = datetime.now()
+    year, month = now.year, now.month
+
+    total_employees = (await db.execute(
+        select(func.count(Employee.id)).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+    )).scalar() or 0
+
+    total_contracts = (await db.execute(
+        select(func.count(Contract.id)).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
+    )).scalar() or 0
+
+    submitted_count = (await db.execute(
+        select(func.count(ScheduleSubmission.id))
+        .join(Employee, Employee.id == ScheduleSubmission.employee_id)
+        .where(
+            Employee.tenant_id == tenant_id,
+            ScheduleSubmission.year == year,
+            ScheduleSubmission.month == month,
+        )
+    )).scalar() or 0
+
+    submitted_pct = round(submitted_count / total_employees * 100) if total_employees > 0 else 0
+
+    stats = {
+        "total_employees": total_employees,
+        "total_contracts": total_contracts,
+        "submitted_count": submitted_count,
+        "pending_count": max(0, total_employees - submitted_count),
+        "submitted_pct": submitted_pct,
+    }
+
+    return templates.TemplateResponse("admin/tenant_overview.html", {
+        "request": request,
+        "tenant": tenant,
+        "stats": stats,
+        "month_name": MONTH_NAMES_PL.get(month, ""),
+        "year": year,
+    })
+
+
+# ============================================================
+# ADMIN — Kalendarz zarządczy
+# ============================================================
+
+@router.get("/admin/{tenant_id}/calendar", response_class=HTMLResponse)
+async def admin_calendar(
+    request: Request,
+    tenant_id: int,
+    year: int = None,
+    month: int = None,
+    contract_id: int = None,
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+
+    now = datetime.now()
+    if year is None:
+        year = now.year
+    if month is None:
+        month = now.month
+
+    # Prev / next month
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+
+    contracts = (await db.execute(
+        select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
+    )).scalars().all()
+
+    # Pobierz pracowników (z filtrem po kontrakcie)
+    if contract_id:
+        employees = (await db.execute(
+            select(Employee)
+            .join(ContractEmployee, ContractEmployee.employee_id == Employee.id)
+            .where(
+                Employee.tenant_id == tenant_id,
+                Employee.is_active == True,
+                ContractEmployee.contract_id == contract_id,
+            )
+            .order_by(Employee.last_name, Employee.first_name)
+            .distinct()
+        )).scalars().all()
+    else:
+        employees = (await db.execute(
+            select(Employee)
+            .where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+            .order_by(Employee.last_name, Employee.first_name)
+        )).scalars().all()
+
+    employee_ids = [e.id for e in employees]
+
+    # Pobierz submissiony z dniami
+    submissions = (await db.execute(
+        select(ScheduleSubmission)
+        .where(
+            ScheduleSubmission.employee_id.in_(employee_ids),
+            ScheduleSubmission.year == year,
+            ScheduleSubmission.month == month,
+        )
+        .options(selectinload(ScheduleSubmission.days))
+    )).scalars().all()
+
+    submissions_by_emp = {s.employee_id: s for s in submissions}
+
+    # Zbuduj mapę: emp_id -> {iso_date: status}
+    day_statuses: dict[int, dict[str, str]] = {}
+    day_hours: dict[int, dict[str, str]] = {}
+    for sub in submissions:
+        day_statuses[sub.employee_id] = {}
+        day_hours[sub.employee_id] = {}
+        for d in sub.days:
+            iso = d.date.isoformat()
+            day_statuses[sub.employee_id][iso] = d.status.value
+            if d.status.value == "partial" and d.hour_from and d.hour_to:
+                day_hours[sub.employee_id][iso] = f"{d.hour_from}–{d.hour_to}"
+
+    num_days = calendar.monthrange(year, month)[1]
+    days = [date(year, month, d) for d in range(1, num_days + 1)]
+    holidays = get_polish_holidays(year)
+    holidays_iso = {d.isoformat(): name for d, name in holidays.items() if d.month == month}
+
+    return templates.TemplateResponse("admin/calendar.html", {
+        "request": request,
+        "tenant": tenant,
+        "contracts": contracts,
+        "selected_contract_id": contract_id,
+        "employees": employees,
+        "submissions_by_emp": submissions_by_emp,
+        "day_statuses": day_statuses,
+        "day_hours": day_hours,
+        "days": days,
+        "holidays_iso": holidays_iso,
+        "year": year,
+        "month": month,
+        "month_name": MONTH_NAMES_PL.get(month, ""),
+        "prev_year": prev_year,
+        "prev_month": prev_month,
+        "next_year": next_year,
+        "next_month": next_month,
+        "submitted_count": len(submissions),
+    })
 
 
 # ============================================================

@@ -12,10 +12,12 @@
 <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-6">
     <span class="font-bold text-blue-700 text-lg">HR-Flow</span>
     {% if tenant is defined and tenant %}
-    <a href="/admin/{{ tenant.id }}/contracts" class="text-sm text-gray-600 hover:text-blue-600">Kontrakty</a>
-    <a href="/admin/{{ tenant.id }}/employees" class="text-sm text-gray-600 hover:text-blue-600">Pracownicy</a>
-    <a href="/admin/{{ tenant.id }}/campaigns" class="text-sm text-gray-600 hover:text-blue-600">Kampanie</a>
+    <a href="/admin/{{ tenant.id }}" class="text-sm text-gray-600 hover:text-blue-600 font-medium">Przegląd</a>
+    <a href="/admin/{{ tenant.id }}/calendar" class="text-sm text-gray-600 hover:text-blue-600">Kalendarz</a>
     <a href="/admin/{{ tenant.id }}/schedules" class="text-sm text-gray-600 hover:text-blue-600">Grafiki</a>
+    <a href="/admin/{{ tenant.id }}/employees" class="text-sm text-gray-600 hover:text-blue-600">Pracownicy</a>
+    <a href="/admin/{{ tenant.id }}/contracts" class="text-sm text-gray-600 hover:text-blue-600">Kontrakty</a>
+    <a href="/admin/{{ tenant.id }}/campaigns" class="text-sm text-gray-600 hover:text-blue-600">Kampanie</a>
     <a href="/admin/{{ tenant.id }}/settings" class="text-sm text-gray-600 hover:text-blue-600">Ustawienia</a>
     <span class="ml-auto text-xs text-gray-400">{{ tenant.name }}</span>
     {% endif %}
