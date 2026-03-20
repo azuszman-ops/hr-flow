@@ -7,8 +7,6 @@ from twilio.rest import Client as TwilioClient
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")  # sandbox default
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000")
-
 _twilio = None
 
 
@@ -20,7 +18,9 @@ def get_twilio():
 
 
 def build_schedule_link(token: str) -> str:
-    return f"{BASE_URL}/schedule/{token}"
+    base = os.getenv("BASE_URL", "http://localhost:8000")
+    print(f"[BASE_URL] Using: {base}")
+    return f"{base}/schedule/{token}"
 
 
 def render_template(body: str, employee, month_name: str, token: str) -> str:
