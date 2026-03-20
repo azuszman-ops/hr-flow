@@ -55,61 +55,65 @@
             <div class="bg-white border border-gray-200 rounded-xl p-3"
                  :class="days['{{ iso }}'] === 'unavailable' ? 'opacity-50' : ''"
                  x-data>
-                <div class="flex items-center gap-3">
-                    <!-- Data -->
-                    <div class="w-16 text-sm font-medium text-gray-700 shrink-0">
-                        {{ day.strftime('%d %b') }}
-                        <div class="text-xs text-gray-400">
-                            {{ ['pon','wt','śr','czw','pt','sob','niedz'][weekday] }}
+                <div class="flex flex-col gap-2">
+                    <div class="flex items-center gap-3">
+                        <!-- Data -->
+                        <div class="w-16 text-sm font-medium text-gray-700 shrink-0">
+                            {{ day.strftime('%d %b') }}
+                            <div class="text-xs text-gray-400">
+                                {{ ['pon','wt','śr','czw','pt','sob','niedz'][weekday] }}
+                            </div>
+                        </div>
+
+                        <!-- Status buttons -->
+                        <div class="flex gap-2 flex-1">
+                            <label class="flex-1">
+                                <input type="radio" name="day_{{ day_num }}" value="available"
+                                       x-model="days['{{ iso }}']"
+                                       {% if existing_days.get(iso, {}).get('status', 'available') == 'available' %}checked{% elif not existing_days %}checked{% endif %}
+                                       class="sr-only peer">
+                                <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                            border-gray-200 text-gray-400
+                                            peer-checked:bg-green-100 peer-checked:border-green-400 peer-checked:text-green-700 peer-checked:font-medium">
+                                    Dostępny
+                                </div>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="day_{{ day_num }}" value="partial"
+                                       x-model="days['{{ iso }}']"
+                                       {% if existing_days.get(iso, {}).get('status') == 'partial' %}checked{% endif %}
+                                       class="sr-only peer">
+                                <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                            border-gray-200 text-gray-400
+                                            peer-checked:bg-yellow-100 peer-checked:border-yellow-400 peer-checked:text-yellow-700 peer-checked:font-medium">
+                                    Częściowo
+                                </div>
+                            </label>
+                            <label class="flex-1">
+                                <input type="radio" name="day_{{ day_num }}" value="unavailable"
+                                       x-model="days['{{ iso }}']"
+                                       {% if existing_days.get(iso, {}).get('status') == 'unavailable' %}checked{% endif %}
+                                       class="sr-only peer">
+                                <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
+                                            border-gray-200 text-gray-400
+                                            peer-checked:bg-gray-100 peer-checked:border-gray-400 peer-checked:text-gray-600 peer-checked:font-medium">
+                                    Niedostępny
+                                </div>
+                            </label>
                         </div>
                     </div>
 
-                    <!-- Status buttons -->
-                    <div class="flex gap-2 flex-1">
-                        <label class="flex-1">
-                            <input type="radio" name="day_{{ day_num }}" value="available"
-                                   x-model="days['{{ iso }}']"
-                                   {% if existing_days.get(iso, {}).get('status', 'available') == 'available' %}checked{% elif not existing_days %}checked{% endif %}
-                                   class="sr-only peer">
-                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
-                                        border-gray-200 text-gray-400
-                                        peer-checked:bg-green-100 peer-checked:border-green-400 peer-checked:text-green-700 peer-checked:font-medium">
-                                Dostępny
-                            </div>
-                        </label>
-                        <label class="flex-1">
-                            <input type="radio" name="day_{{ day_num }}" value="partial"
-                                   x-model="days['{{ iso }}']"
-                                   {% if existing_days.get(iso, {}).get('status') == 'partial' %}checked{% endif %}
-                                   class="sr-only peer">
-                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
-                                        border-gray-200 text-gray-400
-                                        peer-checked:bg-yellow-100 peer-checked:border-yellow-400 peer-checked:text-yellow-700 peer-checked:font-medium">
-                                Częściowo
-                            </div>
-                        </label>
-                        <label class="flex-1">
-                            <input type="radio" name="day_{{ day_num }}" value="unavailable"
-                                   x-model="days['{{ iso }}']"
-                                   {% if existing_days.get(iso, {}).get('status') == 'unavailable' %}checked{% endif %}
-                                   class="sr-only peer">
-                            <div class="text-center text-xs py-1.5 rounded-lg border cursor-pointer transition
-                                        border-gray-200 text-gray-400
-                                        peer-checked:bg-gray-100 peer-checked:border-gray-400 peer-checked:text-gray-600 peer-checked:font-medium">
-                                Niedostępny
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- Godziny (tylko przy partial) -->
-                    <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-1 items-center shrink-0">
+                    <!-- Godziny (tylko przy partial) — osobna linia na mobile -->
+                    <div x-show="days['{{ iso }}'] === 'partial'" class="flex gap-2 items-center pl-19 ml-[76px]">
+                        <span class="text-xs text-gray-500">od</span>
                         <input type="time" name="from_{{ day_num }}"
                                value="{{ existing_days.get(iso, {}).get('from', '08:00') }}"
-                               class="border border-gray-300 rounded px-2 py-1 text-xs w-20">
+                               class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1">
                         <span class="text-gray-400 text-xs">–</span>
+                        <span class="text-xs text-gray-500">do</span>
                         <input type="time" name="to_{{ day_num }}"
                                value="{{ existing_days.get(iso, {}).get('to', '16:00') }}"
-                               class="border border-gray-300 rounded px-2 py-1 text-xs w-20">
+                               class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm flex-1">
                     </div>
                 </div>
             </div>
