@@ -1,17 +1,24 @@
 """
-Serwis wysyłki wiadomości: WhatsApp (Meta Cloud API) + Viber (placeholder) + Email (placeholder)
+Serwis wysyłki wiadomości: WhatsApp (Twilio) + Viber (placeholder) + Email (placeholder)
 """
 import os
-import httpx
+from twilio.rest import Client as TwilioClient
 
-META_ACCESS_TOKEN = os.getenv("META_WHATSAPP_TOKEN")
-META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID")
-META_API_URL = "https://graph.facebook.com/v20.0"
+TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM")
+_twilio = None
+
+
+def get_twilio():
+    global _twilio
+    if _twilio is None:
+        _twilio = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+    return _twilio
 
 
 def build_schedule_link(token: str) -> str:
     base = os.getenv("BASE_URL", "http://localhost:8000")
-    print(f"[BASE_URL] Using: {base}")
     return f"{base}/schedule/{token}"
 
 
@@ -25,50 +32,25 @@ def render_template(body: str, employee, month_name: str, token: str) -> str:
     )
 
 
-def _normalize_phone(phone: str) -> str:
-    """Usuwa + z numeru telefonu (Meta API wymaga E.164 bez +)."""
-    return phone.lstrip("+")
-
-
 async def send_whatsapp(to_phone: str, message: str) -> dict:
     """
-    Wysyła wiadomość WhatsApp przez Meta Cloud API.
+    Wysyła wiadomość WhatsApp przez Twilio.
     to_phone format: +48XXXXXXXXX
     """
-    if not META_ACCESS_TOKEN or not META_PHONE_NUMBER_ID:
-        print("[WHATSAPP] ERROR: META_WHATSAPP_TOKEN or META_PHONE_NUMBER_ID not set")
-        return {"status": "failed", "error": "Meta API not configured"}
+    if not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_WHATSAPP_FROM:
+        print("[WHATSAPP] ERROR: Twilio credentials not configured")
+        return {"status": "failed", "error": "Twilio not configured"}
 
-    phone = _normalize_phone(to_phone)
-    print(f"[WHATSAPP] Sending to {phone} via Meta Cloud API")
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone,
-        "type": "text",
-        "text": {"body": message},
-    }
-
+    print(f"[WHATSAPP] Sending to {to_phone} from {TWILIO_WHATSAPP_FROM}")
     try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{META_API_URL}/{META_PHONE_NUMBER_ID}/messages",
-                headers={
-                    "Authorization": f"Bearer {META_ACCESS_TOKEN}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=30.0,
-            )
-        data = resp.json()
-        if resp.status_code == 200:
-            msg_id = data.get("messages", [{}])[0].get("id", "")
-            print(f"[WHATSAPP] Success: {msg_id}")
-            return {"status": "sent", "external_id": msg_id}
-        else:
-            error = data.get("error", {}).get("message", str(data))
-            print(f"[WHATSAPP] ERROR {resp.status_code}: {error}")
-            return {"status": "failed", "error": error}
+        client = get_twilio()
+        msg = client.messages.create(
+            body=message,
+            from_=f"whatsapp:{TWILIO_WHATSAPP_FROM}",
+            to=f"whatsapp:{to_phone}",
+        )
+        print(f"[WHATSAPP] Success: {msg.sid}")
+        return {"status": "sent", "external_id": msg.sid}
     except Exception as e:
         print(f"[WHATSAPP] ERROR: {e}")
         return {"status": "failed", "error": str(e)}
