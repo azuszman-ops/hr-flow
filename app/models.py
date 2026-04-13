@@ -39,6 +39,7 @@ class Tenant(Base):
     api_key = Column(String(64), default=lambda: secrets.token_hex(32), unique=True)
     login_username = Column(String(100), nullable=True)
     login_password_hash = Column(String(200), nullable=True)
+    admin_email = Column(String(200), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     contracts = relationship("Contract", back_populates="tenant", cascade="all, delete")

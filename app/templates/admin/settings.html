@@ -11,6 +11,12 @@
     Ustawienia zostały zapisane.
 </div>
 {% endif %}
+{% set pwd_error = request.query_params.get('pwd_error') %}
+{% if pwd_error %}
+<div class="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 mb-6 text-sm">
+    {{ pwd_error }}
+</div>
+{% endif %}
 
 <div class="max-w-2xl">
     <div class="bg-white border border-gray-200 rounded-xl p-6">
@@ -72,34 +78,50 @@
                 </button>
             </div>
 
-            <!-- Sekcja hasła -->
-            <div class="border-t border-gray-200 pt-6">
-                <div class="text-sm font-semibold text-gray-700 mb-3">
-                    {{ "Zmień hasło" if tenant.login_password_hash else "Ustaw hasło logowania" }}
-                </div>
-                {% if not tenant.login_password_hash %}
-                <p class="text-xs text-gray-400 mb-3">Po ustawieniu hasła panel będzie wymagał logowania.</p>
-                {% endif %}
-                <div class="grid grid-cols-2 gap-3">
-                    <input type="password" name="new_password" placeholder="Nowe hasło"
-                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    <input type="password" name="confirm_password" placeholder="Powtórz hasło"
-                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                </div>
-                <p class="text-xs text-gray-400 mt-1">Pozostaw puste, aby nie zmieniać hasła.</p>
-            </div>
         </form>
     </div>
+</div>
 
-    {% if tenant.login_password_hash %}
-    <div class="mt-4">
-        <form method="post" action="/admin/{{ tenant.id }}/logout">
-            <button type="submit" class="text-sm text-gray-400 hover:text-red-500 transition">
-                Wyloguj się z tego panelu
+<!-- Sekcja hasła — osobny formularz -->
+<div class="max-w-2xl mt-6">
+    <div class="bg-white border border-gray-200 rounded-xl p-6">
+        <h2 class="text-sm font-semibold text-gray-700 mb-4">
+            {{ "Zmień hasło logowania" if tenant.login_password_hash else "Ustaw hasło logowania" }}
+        </h2>
+        {% if not tenant.login_password_hash %}
+        <p class="text-xs text-gray-400 mb-4">Po ustawieniu hasła panel będzie wymagał logowania przy każdym wejściu.</p>
+        {% endif %}
+        <form method="post" action="/admin/{{ tenant.id }}/settings/password" class="space-y-3">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Email do odzyskiwania hasła</label>
+                <input type="email" name="admin_email" value="{{ tenant.admin_email or '' }}"
+                       placeholder="adres@firma.pl"
+                       class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Nowe hasło</label>
+                    <input type="password" name="new_password" placeholder="Min. 6 znaków"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">Powtórz hasło</label>
+                    <input type="password" name="confirm_password"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+            </div>
+            {% if saved_password %}
+            <div class="text-xs text-green-600 bg-green-50 rounded px-3 py-2">Hasło zostało zmienione.</div>
+            {% endif %}
+            {% if error_password %}
+            <div class="text-xs text-red-600 bg-red-50 rounded px-3 py-2">{{ error_password }}</div>
+            {% endif %}
+            <button type="submit"
+                    class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
+                Zapisz nowe hasło
             </button>
         </form>
     </div>
-    {% endif %}
 </div>
 
 {% endblock %}

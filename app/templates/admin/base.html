@@ -19,9 +19,15 @@
     <a href="/admin/{{ tenant.id }}/contracts" class="text-sm text-gray-600 hover:text-blue-600">Kontrakty</a>
     <a href="/admin/{{ tenant.id }}/campaigns" class="text-sm text-gray-600 hover:text-blue-600">Kampanie</a>
     <a href="/admin/{{ tenant.id }}/settings" class="text-sm text-gray-600 hover:text-blue-600">Ustawienia</a>
-    <span class="ml-auto text-xs text-gray-400">{{ tenant.name }}</span>
+    <div class="ml-auto flex items-center gap-4">
+        <span class="text-xs text-gray-400">{{ tenant.name }}</span>
+        {% if tenant.login_password_hash %}
+        <form method="post" action="/admin/{{ tenant.id }}/logout" class="inline">
+            <button type="submit" class="text-xs text-gray-400 hover:text-red-500 transition">Wyloguj</button>
+        </form>
+        {% endif %}
+    </div>
     {% endif %}
-    <a href="/" class="text-xs text-gray-400 hover:text-gray-600 {% if tenant is not defined %}ml-auto{% endif %}">↩ Wszyscy klienci</a>
 </nav>
 
 <main class="max-w-6xl mx-auto px-6 py-8">

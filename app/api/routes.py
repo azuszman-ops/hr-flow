@@ -9,7 +9,11 @@ from typing import List, Optional
 import calendar
 import csv
 import io
-from app.auth import get_authed_tenant, hash_password, verify_password, NeedsLogin
+import os
+from app.auth import (
+    get_authed_tenant, hash_password, verify_password, NeedsLogin,
+    generate_reset_token, verify_reset_token, send_reset_email,
+)
 
 
 def get_easter(year: int) -> date:
@@ -948,6 +952,107 @@ async def login_submit(
 async def logout(request: Request, tenant_id: int):
     request.session.pop(f"auth_{tenant_id}", None)
     return RedirectResponse(f"/admin/{tenant_id}/login", status_code=302)
+
+
+# ============================================================
+# ADMIN — Zmiana hasła (osobny formularz)
+# ============================================================
+
+@router.post("/admin/{tenant_id}/settings/password")
+async def save_password(
+    request: Request,
+    tenant_id: int,
+    admin_email: str = Form(""),
+    new_password: str = Form(""),
+    confirm_password: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_authed_tenant),
+):
+    error = None
+    if admin_email:
+        tenant.admin_email = admin_email
+
+    if new_password:
+        if len(new_password) < 6:
+            error = "Hasło musi mieć co najmniej 6 znaków."
+        elif new_password != confirm_password:
+            error = "Hasła nie są zgodne."
+        else:
+            tenant.login_password_hash = hash_password(new_password)
+            request.session[f"auth_{tenant_id}"] = True
+
+    await db.commit()
+
+    if error:
+        return RedirectResponse(f"/admin/{tenant_id}/settings?pwd_error={error}", status_code=303)
+    return RedirectResponse(f"/admin/{tenant_id}/settings?saved=1", status_code=303)
+
+
+# ============================================================
+# ADMIN — Reset hasła przez email
+# ============================================================
+
+@router.get("/admin/{tenant_id}/forgot-password", response_class=HTMLResponse)
+async def forgot_password_page(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    sent = request.query_params.get("sent") == "1"
+    return templates.TemplateResponse("admin/forgot_password.html", {
+        "request": request, "tenant": tenant, "sent": sent,
+    })
+
+
+@router.post("/admin/{tenant_id}/forgot-password")
+async def forgot_password_submit(
+    request: Request,
+    tenant_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if tenant and tenant.admin_email and tenant.login_password_hash:
+        token = generate_reset_token(tenant_id)
+        base_url = os.getenv("BASE_URL", str(request.base_url).rstrip("/"))
+        reset_url = f"{base_url}/admin/{tenant_id}/reset-password?token={token}"
+        send_reset_email(tenant.admin_email, reset_url, tenant.name)
+    return RedirectResponse(f"/admin/{tenant_id}/forgot-password?sent=1", status_code=302)
+
+
+@router.get("/admin/{tenant_id}/reset-password", response_class=HTMLResponse)
+async def reset_password_page(
+    request: Request, tenant_id: int, token: str = "",
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    valid = verify_reset_token(token) == tenant_id
+    error = request.query_params.get("error")
+    return templates.TemplateResponse("admin/reset_password.html", {
+        "request": request, "tenant": tenant, "token": token, "valid": valid, "error": error,
+    })
+
+
+@router.post("/admin/{tenant_id}/reset-password")
+async def reset_password_submit(
+    request: Request,
+    tenant_id: int,
+    token: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant or verify_reset_token(token) != tenant_id:
+        raise HTTPException(400, "Link wygasł lub jest nieprawidłowy.")
+    if len(new_password) < 6:
+        return RedirectResponse(f"/admin/{tenant_id}/reset-password?token={token}&error=short", status_code=302)
+    if new_password != confirm_password:
+        return RedirectResponse(f"/admin/{tenant_id}/reset-password?token={token}&error=mismatch", status_code=302)
+    tenant.login_password_hash = hash_password(new_password)
+    await db.commit()
+    request.session[f"auth_{tenant_id}"] = True
+    return RedirectResponse(f"/admin/{tenant_id}?reset=1", status_code=302)
 
 
 # ============================================================
