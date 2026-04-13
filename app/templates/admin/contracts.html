@@ -12,8 +12,14 @@
         + Dodaj kontrakt
     </button>
     <form x-show="open" method="post" action="/admin/{{ tenant.id }}/contracts" class="mt-4 space-y-3" x-cloak>
-        <input name="name" placeholder="Nazwa kontraktu (np. Magazyn XYZ — Warszawa)" required
+        <input name="name" placeholder="Nazwa kontraktu (np. Magazyn XYZ)" required
                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div class="grid grid-cols-2 gap-3">
+            <input name="city_1" placeholder="Miejscowość 1 (np. Warszawa)"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            <input name="city_2" placeholder="Miejscowość 2 (opcjonalnie)"
+                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+        </div>
         <textarea name="description" placeholder="Opis (opcjonalnie)" rows="2"
                   class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"></textarea>
         <button type="submit"
@@ -32,6 +38,11 @@
                 <div>
                     <a href="/admin/{{ tenant.id }}/contracts/{{ contract.id }}"
                        class="font-semibold text-gray-800 hover:text-blue-600 hover:underline">{{ contract.name }}</a>
+                    {% if contract.city_1 or contract.city_2 %}
+                    <div class="text-xs text-blue-500 mt-0.5">
+                        📍 {{ contract.city_1 }}{% if contract.city_1 and contract.city_2 %} / {% endif %}{{ contract.city_2 }}
+                    </div>
+                    {% endif %}
                     {% if contract.description %}
                     <div class="text-sm text-gray-400 mt-1">{{ contract.description }}</div>
                     {% endif %}
@@ -59,6 +70,12 @@
             <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/edit" class="space-y-2">
                 <input name="name" value="{{ contract.name }}" required
                        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                <div class="grid grid-cols-2 gap-2">
+                    <input name="city_1" value="{{ contract.city_1 or '' }}" placeholder="Miejscowość 1"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <input name="city_2" value="{{ contract.city_2 or '' }}" placeholder="Miejscowość 2 (opcjonalnie)"
+                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
                 <textarea name="description" rows="2" placeholder="Opis (opcjonalnie)"
                           class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">{{ contract.description or '' }}</textarea>
                 <div class="flex gap-2">

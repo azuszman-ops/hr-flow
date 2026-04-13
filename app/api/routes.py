@@ -265,9 +265,14 @@ async def create_contract(
     tenant_id: int,
     name: str = Form(...),
     description: str = Form(""),
+    city_1: str = Form(""),
+    city_2: str = Form(""),
     db: AsyncSession = Depends(get_db)
 ):
-    contract = Contract(tenant_id=tenant_id, name=name, description=description)
+    contract = Contract(
+        tenant_id=tenant_id, name=name, description=description or None,
+        city_1=city_1 or None, city_2=city_2 or None,
+    )
     db.add(contract)
     await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
@@ -288,12 +293,16 @@ async def edit_contract(
     contract_id: int,
     name: str = Form(...),
     description: str = Form(""),
+    city_1: str = Form(""),
+    city_2: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     contract = await db.get(Contract, contract_id)
     if contract and contract.tenant_id == tenant_id:
         contract.name = name
         contract.description = description or None
+        contract.city_1 = city_1 or None
+        contract.city_2 = city_2 or None
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
 
@@ -708,23 +717,93 @@ async def save_settings(
 # ============================================================
 
 @router.get("/admin/{tenant_id}/schedules", response_class=HTMLResponse)
-async def admin_schedules(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
+async def admin_schedules(
+    request: Request, tenant_id: int,
+    employee_id: Optional[int] = None,
+    db: AsyncSession = Depends(get_db)
+):
     tenant = await db.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(404)
     now = datetime.now()
-    submissions = (
-        await db.execute(
-            select(ScheduleSubmission)
-            .join(Employee)
-            .where(Employee.tenant_id == tenant_id)
-            .options(selectinload(ScheduleSubmission.employee), selectinload(ScheduleSubmission.days))
-            .order_by(ScheduleSubmission.submitted_at.desc())
-        )
-    ).scalars().all()
+
+    query = (
+        select(ScheduleSubmission)
+        .join(Employee)
+        .where(Employee.tenant_id == tenant_id)
+        .options(selectinload(ScheduleSubmission.employee), selectinload(ScheduleSubmission.days))
+        .order_by(ScheduleSubmission.submitted_at.desc())
+    )
+    if employee_id:
+        query = query.where(ScheduleSubmission.employee_id == employee_id)
+
+    submissions = (await db.execute(query)).scalars().all()
+
+    employees = (await db.execute(
+        select(Employee)
+        .where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+        .order_by(Employee.last_name, Employee.first_name)
+    )).scalars().all()
+
     return templates.TemplateResponse("admin/schedules.html", {
         "request": request, "tenant": tenant, "submissions": submissions,
-        "now": now, "month_names": MONTH_NAMES_PL
+        "now": now, "month_names": MONTH_NAMES_PL,
+        "employees": employees, "selected_employee_id": employee_id,
+    })
+
+
+@router.get("/admin/{tenant_id}/employees/{employee_id}/schedule/pdf", response_class=HTMLResponse)
+async def employee_schedule_pdf(
+    request: Request, tenant_id: int, employee_id: int,
+    year: int = None, month: int = None,
+    db: AsyncSession = Depends(get_db)
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+
+    now = datetime.now()
+    if year is None or month is None:
+        if now.month == 12:
+            year, month = now.year + 1, 1
+        else:
+            year, month = now.year, now.month + 1
+
+    submission = (await db.execute(
+        select(ScheduleSubmission)
+        .where(
+            ScheduleSubmission.employee_id == employee_id,
+            ScheduleSubmission.year == year,
+            ScheduleSubmission.month == month,
+        )
+        .options(selectinload(ScheduleSubmission.days))
+    )).scalar_one_or_none()
+
+    num_days = calendar.monthrange(year, month)[1]
+    days = [date(year, month, d) for d in range(1, num_days + 1)]
+    holidays = get_polish_holidays(year)
+    holidays_iso = {d.isoformat(): name for d, name in holidays.items() if d.month == month}
+
+    day_map = {}
+    if submission:
+        for d in submission.days:
+            day_map[d.date.isoformat()] = d
+
+    return templates.TemplateResponse("admin/schedule_pdf.html", {
+        "request": request,
+        "tenant": tenant,
+        "employee": emp,
+        "submission": submission,
+        "days": days,
+        "holidays_iso": holidays_iso,
+        "day_map": day_map,
+        "year": year,
+        "month": month,
+        "month_name": MONTH_NAMES_PL.get(month, ""),
+        "now": now,
     })
 
 
@@ -788,14 +867,13 @@ async def submit_schedule(request: Request, token: str, db: AsyncSession = Depen
     if not emp or not emp.is_active:
         raise HTTPException(404)
 
-    form = await request.form()
     now = datetime.now()
     if now.month == 12:
         year, month = now.year + 1, 1
     else:
         year, month = now.year, now.month + 1
 
-    # Usuń stare wpisy jeśli istnieją
+    # Jeśli grafik już wysłany — odrzuć (blokada edycji)
     existing = (await db.execute(
         select(ScheduleSubmission).where(
             ScheduleSubmission.employee_id == emp.id,
@@ -804,9 +882,9 @@ async def submit_schedule(request: Request, token: str, db: AsyncSession = Depen
         )
     )).scalar_one_or_none()
     if existing:
-        await db.execute(delete(AvailabilityDay).where(AvailabilityDay.submission_id == existing.id))
-        await db.delete(existing)
-        await db.flush()
+        raise HTTPException(403, "Grafik został już wysłany. Skontaktuj się z koordynatorem.")
+
+    form = await request.form()
 
     submission = ScheduleSubmission(
         employee_id=emp.id,

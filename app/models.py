@@ -54,6 +54,8 @@ class Contract(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     name = Column(String(200), nullable=False)
     description = Column(Text, nullable=True)
+    city_1 = Column(String(200), nullable=True)
+    city_2 = Column(String(200), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

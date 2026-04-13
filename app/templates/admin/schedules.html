@@ -2,9 +2,25 @@
 {% block title %}Grafiki — {{ tenant.name }}{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-bold text-gray-800">Zebrane grafiki — {{ tenant.name }}</h1>
-    <span class="text-sm text-gray-400">{{ submissions|length }} wypełnionych</span>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+    <div>
+        <h1 class="text-xl font-bold text-gray-800">Zebrane grafiki — {{ tenant.name }}</h1>
+        <span class="text-sm text-gray-400">{{ submissions|length }} wypełnionych</span>
+    </div>
+    <!-- Filtr per osoba -->
+    <select onchange="
+            const url = new URL(window.location);
+            if (this.value) url.searchParams.set('employee_id', this.value);
+            else url.searchParams.delete('employee_id');
+            window.location.href = url.toString();"
+            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+        <option value="">Wszyscy pracownicy</option>
+        {% for emp in employees %}
+        <option value="{{ emp.id }}" {% if selected_employee_id == emp.id %}selected{% endif %}>
+            {{ emp.last_name }} {{ emp.first_name }}
+        </option>
+        {% endfor %}
+    </select>
 </div>
 
 <div class="space-y-4">
@@ -19,9 +35,16 @@
                     {{ month_names.get(sub.month, sub.month) }} {{ sub.year }}
                 </span>
             </div>
-            <span class="text-xs text-gray-400">
-                Wypełniono: {{ sub.submitted_at.strftime('%d.%m.%Y %H:%M') }}
-            </span>
+            <div class="flex items-center gap-3">
+                <span class="text-xs text-gray-400">
+                    Wypełniono: {{ sub.submitted_at.strftime('%d.%m.%Y %H:%M') }}
+                </span>
+                <a href="/admin/{{ tenant.id }}/employees/{{ sub.employee_id }}/schedule/pdf?year={{ sub.year }}&month={{ sub.month }}"
+                   target="_blank"
+                   class="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-lg px-3 py-1 hover:bg-blue-100 transition whitespace-nowrap">
+                    📄 Eksportuj PDF
+                </a>
+            </div>
         </div>
 
         <!-- Statystyki -->

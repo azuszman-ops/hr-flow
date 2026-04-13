@@ -37,3 +37,9 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE message_logs ADD COLUMN IF NOT EXISTS is_reminder_2 BOOLEAN DEFAULT FALSE"
         ))
+        await conn.execute(text(
+            "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS city_1 VARCHAR(200)"
+        ))
+        await conn.execute(text(
+            "ALTER TABLE contracts ADD COLUMN IF NOT EXISTS city_2 VARCHAR(200)"
+        ))

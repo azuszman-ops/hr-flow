@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <title>Dostępność — {{ employee.first_name }} {{ employee.last_name }} — {{ month_name }} {{ year }}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1a1a; background: white; padding: 24px; }
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #2563eb; padding-bottom: 12px; }
+        .header-left h1 { font-size: 18px; font-weight: bold; color: #1e3a8a; }
+        .header-left p { font-size: 13px; color: #6b7280; margin-top: 4px; }
+        .header-right { text-align: right; font-size: 11px; color: #9ca3af; }
+        .meta { display: flex; gap: 24px; margin-bottom: 16px; }
+        .meta-box { background: #f3f4f6; border-radius: 8px; padding: 10px 16px; }
+        .meta-box .label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; }
+        .meta-box .value { font-size: 14px; font-weight: bold; color: #111827; margin-top: 2px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th { background: #1e3a8a; color: white; padding: 7px 10px; text-align: left; font-size: 11px; }
+        td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; font-size: 11px; }
+        tr:nth-child(even) td { background: #f9fafb; }
+        .holiday td { background: #fff1f2 !important; color: #be185d; }
+        .status-available { color: #15803d; font-weight: 600; }
+        .status-partial { color: #b45309; font-weight: 600; }
+        .status-unavailable { color: #9ca3af; }
+        .status-none { color: #d1d5db; }
+        .weekend td:first-child { color: #ef4444; }
+        .summary { margin-top: 20px; display: flex; gap: 16px; }
+        .summary-box { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 16px; flex: 1; text-align: center; }
+        .summary-box .count { font-size: 22px; font-weight: bold; }
+        .summary-box .lbl { font-size: 10px; color: #6b7280; margin-top: 2px; }
+        .no-data { text-align: center; padding: 40px; color: #9ca3af; font-size: 14px; }
+        .print-btn { position: fixed; bottom: 24px; right: 24px; background: #2563eb; color: white; border: none; border-radius: 10px; padding: 12px 24px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(37,99,235,0.4); }
+        .print-btn:hover { background: #1d4ed8; }
+        @media print {
+            .print-btn { display: none; }
+            body { padding: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-left">
+        <h1>Dostępność pracownika</h1>
+        <p>{{ employee.first_name }} {{ employee.last_name }} — {{ month_name | capitalize }} {{ year }}</p>
+    </div>
+    <div class="header-right">
+        {{ tenant.name }}<br>
+        Wygenerowano: {{ now.strftime('%d.%m.%Y') if now else '' }}
+    </div>
+</div>
+
+{% set available_count = 0 %}
+{% set partial_count = 0 %}
+{% set unavailable_count = 0 %}
+{% if submission %}
+{% set available_count = submission.days | selectattr('status.value', 'eq', 'available') | list | length %}
+{% set partial_count = submission.days | selectattr('status.value', 'eq', 'partial') | list | length %}
+{% set unavailable_count = submission.days | selectattr('status.value', 'eq', 'unavailable') | list | length %}
+{% endif %}
+
+<div class="meta">
+    <div class="meta-box">
+        <div class="label">Pracownik</div>
+        <div class="value">{{ employee.first_name }} {{ employee.last_name }}</div>
+    </div>
+    <div class="meta-box">
+        <div class="label">Miesiąc</div>
+        <div class="value">{{ month_name | capitalize }} {{ year }}</div>
+    </div>
+    <div class="meta-box">
+        <div class="label">Status</div>
+        <div class="value">{% if submission %}Wypełniony{% else %}Brak grafiku{% endif %}</div>
+    </div>
+    {% if submission %}
+    <div class="meta-box">
+        <div class="label">Data wysłania</div>
+        <div class="value">{{ submission.submitted_at.strftime('%d.%m.%Y') }}</div>
+    </div>
+    {% endif %}
+</div>
+
+{% if submission %}
+<table>
+    <thead>
+        <tr>
+            <th style="width: 40px;">Dzień</th>
+            <th style="width: 60px;">Dzień tyg.</th>
+            <th>Status</th>
+            <th>Godziny</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for day in days %}
+        {% set iso = day.isoformat() %}
+        {% set holiday_name = holidays_iso.get(iso) %}
+        {% set d = day_map.get(iso) %}
+        {% set is_weekend = day.weekday() >= 5 %}
+        <tr class="{% if holiday_name %}holiday{% elif is_weekend %}weekend{% endif %}">
+            <td>{{ day.day }}</td>
+            <td>{{ ['Pon','Wt','Śr','Czw','Pt','Sob','Niedz'][day.weekday()] }}</td>
+            <td>
+                {% if holiday_name %}
+                    🎉 {{ holiday_name }}
+                {% elif d %}
+                    {% if d.status.value == 'available' %}
+                        <span class="status-available">✓ Dostępny</span>
+                    {% elif d.status.value == 'partial' %}
+                        <span class="status-partial">~ Częściowo</span>
+                    {% else %}
+                        <span class="status-unavailable">Niedostępny</span>
+                    {% endif %}
+                {% else %}
+                    <span class="status-none">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if d and d.status.value == 'partial' and d.hour_from %}
+                    {{ d.hour_from }} – {{ d.hour_to }}
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="summary">
+    <div class="summary-box">
+        <div class="count" style="color: #15803d;">{{ available_count }}</div>
+        <div class="lbl">Dostępny</div>
+    </div>
+    <div class="summary-box">
+        <div class="count" style="color: #b45309;">{{ partial_count }}</div>
+        <div class="lbl">Częściowo</div>
+    </div>
+    <div class="summary-box">
+        <div class="count" style="color: #9ca3af;">{{ unavailable_count }}</div>
+        <div class="lbl">Niedostępny</div>
+    </div>
+</div>
+
+{% if submission.notes %}
+<div style="margin-top: 16px; padding: 10px 14px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 11px; color: #6b7280;">
+    <strong>Uwagi:</strong> {{ submission.notes }}
+</div>
+{% endif %}
+
+{% else %}
+<div class="no-data">Ten pracownik nie wypełnił jeszcze grafiku na {{ month_name }} {{ year }}.</div>
+{% endif %}
+
+<button class="print-btn" onclick="window.print()">🖨️ Drukuj / Zapisz PDF</button>
+
+<script>
+    // Auto-print można odkomentować jeśli potrzebne
+    // window.onload = () => window.print();
+</script>
+</body>
+</html>
