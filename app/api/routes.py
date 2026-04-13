@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
@@ -7,6 +7,9 @@ from sqlalchemy.orm import selectinload
 from datetime import date, datetime, timedelta
 from typing import List, Optional
 import calendar
+import csv
+import io
+from app.auth import get_authed_tenant, hash_password, verify_password, NeedsLogin
 
 
 def get_easter(year: int) -> date:
@@ -81,11 +84,7 @@ async def admin_dashboard(request: Request, db: AsyncSession = Depends(get_db)):
 # ============================================================
 
 @router.get("/admin/{tenant_id}", response_class=HTMLResponse)
-async def tenant_overview(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
-
+async def tenant_overview(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
     now = datetime.now()
     year, month = now.year, now.month
 
@@ -138,11 +137,8 @@ async def admin_calendar(
     month: int = None,
     contract_id: int = None,
     db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_authed_tenant),
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
-
     now = datetime.now()
     if year is None or month is None:
         # Domyślnie: następny miesiąc (zbieramy grafik na przyszły miesiąc)
@@ -244,10 +240,7 @@ async def admin_calendar(
 # ============================================================
 
 @router.get("/admin/{tenant_id}/contracts", response_class=HTMLResponse)
-async def admin_contracts(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
+async def admin_contracts(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
     contracts = (
         await db.execute(
             select(Contract)
@@ -309,11 +302,8 @@ async def edit_contract(
 
 @router.get("/admin/{tenant_id}/contracts/{contract_id}", response_class=HTMLResponse)
 async def contract_detail(
-    request: Request, tenant_id: int, contract_id: int, db: AsyncSession = Depends(get_db)
+    request: Request, tenant_id: int, contract_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     contract = (
         await db.execute(
             select(Contract)
@@ -398,10 +388,7 @@ async def remove_employee_from_contract(
 # ============================================================
 
 @router.get("/admin/{tenant_id}/employees", response_class=HTMLResponse)
-async def admin_employees(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
+async def admin_employees(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
     employees = (
         await db.execute(
             select(Employee)
@@ -456,11 +443,8 @@ async def delete_employee(tenant_id: int, employee_id: int, db: AsyncSession = D
 
 @router.get("/admin/{tenant_id}/employees/{employee_id}/edit", response_class=HTMLResponse)
 async def edit_employee_form(
-    request: Request, tenant_id: int, employee_id: int, db: AsyncSession = Depends(get_db)
+    request: Request, tenant_id: int, employee_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     emp = await db.get(Employee, employee_id)
     if not emp or emp.tenant_id != tenant_id:
         raise HTTPException(404)
@@ -497,10 +481,7 @@ async def edit_employee(
 # ============================================================
 
 @router.get("/admin/{tenant_id}/campaigns", response_class=HTMLResponse)
-async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
+async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
     campaigns = (
         await db.execute(
             select(MessageCampaign)
@@ -558,6 +539,7 @@ async def send_campaign(
     tenant_id: int,
     campaign_id: int,
     db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
 ):
     """Wysyła wiadomości WhatsApp do aktywnych pracowników (opcjonalnie filtrowanych po kontraktach)."""
     campaign = await db.get(MessageCampaign, campaign_id)
@@ -649,11 +631,8 @@ async def delete_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = D
 
 @router.get("/admin/{tenant_id}/settings", response_class=HTMLResponse)
 async def admin_settings(
-    request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)
+    request: Request, tenant_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     settings = (
         await db.execute(
             select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
@@ -676,17 +655,18 @@ async def admin_settings(
 
 @router.post("/admin/{tenant_id}/settings")
 async def save_settings(
+    request: Request,
     tenant_id: int,
     initial_message: str = Form(...),
     reminder_message: str = Form(...),
     reminder_days: int = Form(3),
     reminder_2_message: str = Form(""),
     reminder_2_days: int = Form(1),
+    new_password: str = Form(""),
+    confirm_password: str = Form(""),
     db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_authed_tenant),
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     settings = (
         await db.execute(
             select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
@@ -708,6 +688,14 @@ async def save_settings(
             reminder_2_days=reminder_2_days,
         )
         db.add(settings)
+
+    # Zmiana hasła (jeśli podano)
+    if new_password:
+        if new_password == confirm_password:
+            tenant.login_username = tenant.login_username or tenant.slug
+            tenant.login_password_hash = hash_password(new_password)
+            request.session[f"auth_{tenant_id}"] = True  # nie wyloguj po zmianie hasła
+
     await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/settings?saved=1", status_code=303)
 
@@ -720,11 +708,9 @@ async def save_settings(
 async def admin_schedules(
     request: Request, tenant_id: int,
     employee_id: Optional[int] = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_authed_tenant),
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     now = datetime.now()
 
     query = (
@@ -756,11 +742,9 @@ async def admin_schedules(
 async def employee_schedule_pdf(
     request: Request, tenant_id: int, employee_id: int,
     year: int = None, month: int = None,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    tenant: Tenant = Depends(get_authed_tenant),
 ):
-    tenant = await db.get(Tenant, tenant_id)
-    if not tenant:
-        raise HTTPException(404)
     emp = await db.get(Employee, employee_id)
     if not emp or emp.tenant_id != tenant_id:
         raise HTTPException(404)
@@ -923,6 +907,129 @@ async def submit_schedule(request: Request, token: str, db: AsyncSession = Depen
         "month_name": MONTH_NAMES_PL.get(month, ""),
         "year": year,
     })
+
+
+# ============================================================
+# ADMIN — Logowanie
+# ============================================================
+
+@router.get("/admin/{tenant_id}/login", response_class=HTMLResponse)
+async def login_page(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db)):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(404)
+    if not tenant.login_password_hash:
+        return RedirectResponse(f"/admin/{tenant_id}", status_code=302)
+    if request.session.get(f"auth_{tenant_id}"):
+        return RedirectResponse(f"/admin/{tenant_id}", status_code=302)
+    error = request.query_params.get("error")
+    return templates.TemplateResponse("admin/login.html", {
+        "request": request, "tenant": tenant, "error": error
+    })
+
+
+@router.post("/admin/{tenant_id}/login")
+async def login_submit(
+    request: Request,
+    tenant_id: int,
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    tenant = await db.get(Tenant, tenant_id)
+    if not tenant or not tenant.login_password_hash:
+        return RedirectResponse(f"/admin/{tenant_id}", status_code=302)
+    if verify_password(password, tenant.login_password_hash):
+        request.session[f"auth_{tenant_id}"] = True
+        return RedirectResponse(f"/admin/{tenant_id}", status_code=302)
+    return RedirectResponse(f"/admin/{tenant_id}/login?error=1", status_code=302)
+
+
+@router.post("/admin/{tenant_id}/logout")
+async def logout(request: Request, tenant_id: int):
+    request.session.pop(f"auth_{tenant_id}", None)
+    return RedirectResponse(f"/admin/{tenant_id}/login", status_code=302)
+
+
+# ============================================================
+# ADMIN — Import pracowników z CSV
+# ============================================================
+
+@router.get("/admin/{tenant_id}/employees/import/template")
+async def csv_template(tenant_id: int, _: Tenant = Depends(get_authed_tenant)):
+    content = "imie,nazwisko,telefon_whatsapp,kontrakt\nJan,Kowalski,+48123456789,Magazyn Warszawa\nAnna,Nowak,+48987654321,\n"
+    return StreamingResponse(
+        io.StringIO(content),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=szablon_pracownicy.csv"},
+    )
+
+
+@router.post("/admin/{tenant_id}/employees/import")
+async def import_employees_csv(
+    request: Request,
+    tenant_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
+):
+    content = await file.read()
+    # Obsługa BOM i różnych encodingów
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    contracts = (await db.execute(
+        select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
+    )).scalars().all()
+    contract_map = {c.name.lower(): c.id for c in contracts}
+
+    reader = csv.DictReader(io.StringIO(text))
+    imported, skipped, errors = 0, 0, []
+
+    for i, row in enumerate(reader, start=2):
+        first_name = (row.get("imie") or row.get("first_name") or "").strip()
+        last_name = (row.get("nazwisko") or row.get("last_name") or "").strip()
+        phone = (row.get("telefon_whatsapp") or row.get("telefon") or row.get("phone_whatsapp") or "").strip()
+        contract_name = (row.get("kontrakt") or row.get("contract") or "").strip()
+
+        if not first_name or not last_name:
+            errors.append(f"Wiersz {i}: brak imienia lub nazwiska")
+            skipped += 1
+            continue
+
+        # Sprawdź duplikat po telefonie
+        if phone:
+            existing = (await db.execute(
+                select(Employee).where(
+                    Employee.tenant_id == tenant_id,
+                    Employee.phone_whatsapp == phone,
+                )
+            )).scalar_one_or_none()
+            if existing:
+                skipped += 1
+                continue
+
+        emp = Employee(
+            tenant_id=tenant_id,
+            first_name=first_name,
+            last_name=last_name,
+            phone_whatsapp=phone or None,
+        )
+        db.add(emp)
+        await db.flush()
+
+        # Przypisz do kontraktu jeśli podano
+        if contract_name:
+            contract_id = contract_map.get(contract_name.lower())
+            if contract_id:
+                link = ContractEmployee(contract_id=contract_id, employee_id=emp.id)
+                db.add(link)
+
+        imported += 1
+
+    await db.commit()
+    return JSONResponse({"imported": imported, "skipped": skipped, "errors": errors})
 
 
 # ============================================================

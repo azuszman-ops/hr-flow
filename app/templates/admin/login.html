@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logowanie — {{ tenant.name }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+<div class="w-full max-w-sm px-4">
+
+    <div class="text-center mb-8">
+        <div class="text-3xl font-bold text-blue-600 mb-1">HR-Flow</div>
+        <div class="text-gray-500 text-sm">{{ tenant.name }}</div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-2xl p-8 shadow-sm">
+        <h1 class="text-lg font-semibold text-gray-800 mb-6">Zaloguj się</h1>
+
+        {% if error %}
+        <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 mb-5 text-sm">
+            Nieprawidłowe hasło. Spróbuj ponownie.
+        </div>
+        {% endif %}
+
+        <form method="post" action="/admin/{{ tenant.id }}/login" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Hasło</label>
+                <input type="password" name="password" required autofocus
+                       class="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                       placeholder="Wpisz hasło">
+            </div>
+            <button type="submit"
+                    class="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700 transition">
+                Zaloguj się
+            </button>
+        </form>
+    </div>
+</div>
+</body>
+</html>

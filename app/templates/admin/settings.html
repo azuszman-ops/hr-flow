@@ -71,8 +71,35 @@
                     Zapisz ustawienia
                 </button>
             </div>
+
+            <!-- Sekcja hasła -->
+            <div class="border-t border-gray-200 pt-6">
+                <div class="text-sm font-semibold text-gray-700 mb-3">
+                    {{ "Zmień hasło" if tenant.login_password_hash else "Ustaw hasło logowania" }}
+                </div>
+                {% if not tenant.login_password_hash %}
+                <p class="text-xs text-gray-400 mb-3">Po ustawieniu hasła panel będzie wymagał logowania.</p>
+                {% endif %}
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="password" name="new_password" placeholder="Nowe hasło"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <input type="password" name="confirm_password" placeholder="Powtórz hasło"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Pozostaw puste, aby nie zmieniać hasła.</p>
+            </div>
         </form>
     </div>
+
+    {% if tenant.login_password_hash %}
+    <div class="mt-4">
+        <form method="post" action="/admin/{{ tenant.id }}/logout">
+            <button type="submit" class="text-sm text-gray-400 hover:text-red-500 transition">
+                Wyloguj się z tego panelu
+            </button>
+        </form>
+    </div>
+    {% endif %}
 </div>
 
 {% endblock %}
