@@ -19,57 +19,43 @@
 {% endif %}
 
 <div class="max-w-2xl">
+
+    <!-- Terminy przypomnień -->
     <div class="bg-white border border-gray-200 rounded-xl p-6">
         <form method="post" action="/admin/{{ tenant.id }}/settings" class="space-y-6">
 
-            <!-- Szablon wiadomości początkowej -->
-            <div>
-                <label class="block text-sm font-semibold text-gray-700 mb-1">Wiadomość początkowa</label>
-                <p class="text-xs text-gray-400 mb-2">
-                    Zmienne: <code class="bg-gray-100 px-1 rounded">{first_name}</code>
-                    <code class="bg-gray-100 px-1 rounded">{last_name}</code>
-                    <code class="bg-gray-100 px-1 rounded">{month_name}</code>
-                    <code class="bg-gray-100 px-1 rounded">{schedule_link}</code>
-                </p>
-                <textarea name="initial_message" rows="6" required
-                          class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono">{{ settings.initial_message }}</textarea>
-            </div>
-
-            <!-- Sekcja przypomnień -->
             <div class="border border-gray-200 rounded-xl p-4 space-y-4 bg-gray-50">
                 <div class="text-sm font-semibold text-gray-700">Automatyczne przypomnienia</div>
 
-                <!-- Przypomnienie 1 -->
-                <div class="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
                     <div class="flex items-center gap-3">
                         <span class="text-xs font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Przypomnienie 1</span>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-gray-500">Wyślij po</span>
                             <input type="number" name="reminder_days" min="1" max="30" value="{{ settings.reminder_days }}"
                                    class="border border-gray-300 rounded-lg px-2 py-1 text-sm w-16 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                            <span class="text-xs text-gray-500">dniach od wysłania wiadomości początkowej (jeśli brak odpowiedzi)</span>
+                            <span class="text-xs text-gray-500">dniach od wiadomości początkowej (jeśli brak odpowiedzi)</span>
                         </div>
                     </div>
-                    <textarea name="reminder_message" rows="3" required
-                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono">{{ settings.reminder_message }}</textarea>
                 </div>
 
-                <!-- Przypomnienie 2 -->
-                <div class="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
                     <div class="flex items-center gap-3">
                         <span class="text-xs font-semibold bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Przypomnienie 2</span>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-gray-500">Wyślij po kolejnych</span>
                             <input type="number" name="reminder_2_days" min="1" max="30" value="{{ settings.reminder_2_days or 1 }}"
                                    class="border border-gray-300 rounded-lg px-2 py-1 text-sm w-16 focus:outline-none focus:ring-2 focus:ring-blue-400">
-                            <span class="text-xs text-gray-500">dniach od przypomnienia 1 (zostaw puste żeby wyłączyć)</span>
+                            <span class="text-xs text-gray-500">dniach od przypomnienia 1</span>
                         </div>
                     </div>
-                    <textarea name="reminder_2_message" rows="3"
-                              placeholder="Pozostaw puste, aby nie wysyłać drugiego przypomnienia"
-                              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 font-mono">{{ settings.reminder_2_message or '' }}</textarea>
                 </div>
             </div>
+
+            <!-- Hidden fields required by backend -->
+            <input type="hidden" name="initial_message" value="{{ settings.initial_message }}">
+            <input type="hidden" name="reminder_message" value="{{ settings.reminder_message }}">
+            <input type="hidden" name="reminder_2_message" value="{{ settings.reminder_2_message or '' }}">
 
             <div>
                 <button type="submit"
@@ -80,6 +66,69 @@
 
         </form>
     </div>
+
+    <!-- Jak zmienić treść wiadomości -->
+    <div class="bg-white border border-gray-200 rounded-xl p-6 mt-6">
+        <h2 class="text-sm font-semibold text-gray-700 mb-1">Jak zmienić treść wiadomości?</h2>
+        <p class="text-xs text-gray-500 mb-4">
+            Treść wiadomości WhatsApp jest zatwierdzona przez Meta i zarządzana w panelu Twilio.
+            Aby ją zmienić, postępuj według poniższej instrukcji. Zatwierdzenie zajmuje zwykle kilkanaście minut.
+        </p>
+
+        <ol class="space-y-4 text-sm text-gray-700">
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">1</span>
+                <div>
+                    Zaloguj się do <strong>console.twilio.com</strong> i przejdź do:<br>
+                    <span class="text-xs text-gray-500">Messaging → Content Template Builder</span>
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">2</span>
+                <div>
+                    Kliknij <strong>„Create new"</strong> (niebieski przycisk w prawym górnym rogu).
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">3</span>
+                <div>
+                    Wybierz język <strong>Polish</strong> i typ treści <strong>Text</strong>.
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">4</span>
+                <div>
+                    Wpisz treść wiadomości. Używaj specjalnych zmiennych zamiast konkretnych danych:<br>
+                    <div class="mt-2 space-y-1 text-xs">
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 font-mono">
+                            <span class="text-blue-600 font-bold">&#123;&#123;1&#125;&#125;</span> — imię pracownika (np. „Anna")
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 font-mono">
+                            <span class="text-blue-600 font-bold">&#123;&#123;2&#125;&#125;</span> — nazwa miesiąca (np. „maj")
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 font-mono">
+                            <span class="text-blue-600 font-bold">&#123;&#123;3&#125;&#125;</span> — link do grafiku
+                        </div>
+                    </div>
+                    <div class="mt-2 text-xs text-gray-500">Przykład: <em>„Cześć &#123;&#123;1&#125;&#125;! Wypełnij grafik na &#123;&#123;2&#125;&#125;: &#123;&#123;3&#125;&#125;"</em></div>
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">5</span>
+                <div>
+                    Kliknij <strong>„Save and submit"</strong>. Twilio wyśle szablon do zatwierdzenia przez Meta.<br>
+                    <span class="text-xs text-gray-500">Status „Approved" pojawi się zwykle w ciągu 15–30 minut.</span>
+                </div>
+            </li>
+            <li class="flex gap-3">
+                <span class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">6</span>
+                <div>
+                    Po zatwierdzeniu <strong>skontaktuj się z administratorem systemu</strong>, podając nazwę nowego szablonu — zostanie on aktywowany w aplikacji.
+                </div>
+            </li>
+        </ol>
+    </div>
+
 </div>
 
 <!-- Sekcja hasła — osobny formularz -->
