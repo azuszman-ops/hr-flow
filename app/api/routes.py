@@ -501,8 +501,45 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
             select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
         )
     ).scalars().all()
+
+    # Logi wiadomości per kampania
+    all_logs = (
+        await db.execute(
+            select(MessageLog)
+            .where(MessageLog.campaign_id.in_([c.id for c in campaigns]))
+            .options(selectinload(MessageLog.employee))
+        )
+    ).scalars().all() if campaigns else []
+
+    # Uzupełnione grafiki per kampania
+    all_submissions = (
+        await db.execute(
+            select(ScheduleSubmission)
+            .where(ScheduleSubmission.campaign_id.in_([c.id for c in campaigns]))
+        )
+    ).scalars().all() if campaigns else []
+
+    # Zbuduj słownik: campaign_id -> {employee_id -> {initial, r1, r2, filled}}
+    from collections import defaultdict
+    campaign_stats = {}
+    for camp in campaigns:
+        emp_map = defaultdict(lambda: {"initial": None, "r1": None, "r2": None, "filled": False})
+        for log in all_logs:
+            if log.campaign_id != camp.id:
+                continue
+            e = emp_map[log.employee_id]
+            if not log.is_reminder and not log.is_reminder_2:
+                e["initial"] = log
+            elif log.is_reminder:
+                e["r1"] = log
+            elif log.is_reminder_2:
+                e["r2"] = log
+        for sub in all_submissions:
+            if sub.campaign_id == camp.id:
+                emp_map[sub.employee_id]["filled"] = True
+        campaign_stats[camp.id] = emp_map
+
     now = datetime.now()
-    # default_month = następny miesiąc (zbieramy grafik na przyszły miesiąc)
     if now.month == 12:
         default_year, default_month = now.year + 1, 1
     else:
@@ -510,6 +547,7 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
     return templates.TemplateResponse("admin/campaigns.html", {
         "request": request, "tenant": tenant, "campaigns": campaigns,
         "employees": employees, "contracts": contracts,
+        "campaign_stats": campaign_stats,
         "now": now, "default_year": default_year, "default_month": default_month,
         "month_names": MONTH_NAMES_PL
     })
