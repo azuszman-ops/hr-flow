@@ -63,7 +63,7 @@ from app.models import (
     TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
-    send_whatsapp, render_template, MONTH_NAMES_PL, build_schedule_link
+    send_whatsapp, MONTH_NAMES_PL, build_schedule_link, TEMPLATE_INITIAL,
 )
 
 router = APIRouter()
@@ -596,8 +596,11 @@ async def send_campaign(
     for emp in employees:
         if not emp.phone_whatsapp:
             continue
-        message = render_template(message_template, emp, month_name, emp.token)
-        result = await send_whatsapp(emp.phone_whatsapp, message)
+        result = await send_whatsapp(
+            emp.phone_whatsapp,
+            TEMPLATE_INITIAL,
+            {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+        )
         log = MessageLog(
             campaign_id=campaign_id,
             employee_id=emp.id,

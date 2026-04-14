@@ -1,6 +1,7 @@
 """
 Serwis wysyłki wiadomości: WhatsApp (Twilio) + Viber (placeholder) + Email (placeholder)
 """
+import json
 import os
 from twilio.rest import Client as TwilioClient
 
@@ -8,6 +9,11 @@ TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_WHATSAPP_FROM = os.getenv("TWILIO_WHATSAPP_FROM")
 _twilio = None
+
+# Twilio Content Template SIDs
+TEMPLATE_INITIAL = "HXbb3ff01f34d682de8d2c79e37d13f44d"
+TEMPLATE_REMINDER_1 = "HXdda68b18597f2fbeb0d4bd52ecc6dfbf"
+TEMPLATE_REMINDER_2 = "HX946cf91b414f551b35e3a809bc855605"
 
 
 def get_twilio():
@@ -22,30 +28,22 @@ def build_schedule_link(token: str) -> str:
     return f"{base}/schedule/{token}"
 
 
-def render_template(body: str, employee, month_name: str, token: str) -> str:
-    return (
-        body
-        .replace("{first_name}", employee.first_name)
-        .replace("{last_name}", employee.last_name)
-        .replace("{month_name}", month_name)
-        .replace("{schedule_link}", build_schedule_link(token))
-    )
-
-
-async def send_whatsapp(to_phone: str, message: str) -> dict:
+async def send_whatsapp(to_phone: str, template_sid: str, variables: dict) -> dict:
     """
-    Wysyła wiadomość WhatsApp przez Twilio.
+    Wysyła wiadomość WhatsApp przez Twilio Content Template.
     to_phone format: +48XXXXXXXXX
+    variables: {"1": first_name, "2": month_name, "3": schedule_link}
     """
     if not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_WHATSAPP_FROM:
         print("[WHATSAPP] ERROR: Twilio credentials not configured")
         return {"status": "failed", "error": "Twilio not configured"}
 
-    print(f"[WHATSAPP] Sending to {to_phone} from {TWILIO_WHATSAPP_FROM}")
+    print(f"[WHATSAPP] Sending to {to_phone} template={template_sid}")
     try:
         client = get_twilio()
         msg = client.messages.create(
-            body=message,
+            content_sid=template_sid,
+            content_variables=json.dumps(variables),
             from_=f"whatsapp:{TWILIO_WHATSAPP_FROM}",
             to=f"whatsapp:{to_phone}",
         )

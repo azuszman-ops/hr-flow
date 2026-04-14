@@ -16,7 +16,10 @@ from app.models import (
     TenantSettings, MessageChannel, CampaignStatus,
     DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
-from app.services.messaging import send_whatsapp, render_template, MONTH_NAMES_PL
+from app.services.messaging import (
+    send_whatsapp, MONTH_NAMES_PL, build_schedule_link,
+    TEMPLATE_REMINDER_1, TEMPLATE_REMINDER_2,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,8 +119,11 @@ async def send_follow_up_reminders():
                 if not existing_reminder:
                     # Wyślij przypomnienie 1
                     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
-                    message = render_template(reminder_template, emp, month_name, emp.token)
-                    result = await send_whatsapp(emp.phone_whatsapp, message)
+                    result = await send_whatsapp(
+                        emp.phone_whatsapp,
+                        TEMPLATE_REMINDER_1,
+                        {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+                    )
                     reminder_log = MessageLog(
                         campaign_id=campaign.id,
                         employee_id=emp.id,
@@ -151,8 +157,11 @@ async def send_follow_up_reminders():
                     if not existing_reminder_2:
                         # Wyślij przypomnienie 2
                         month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
-                        message = render_template(reminder_2_template, emp, month_name, emp.token)
-                        result = await send_whatsapp(emp.phone_whatsapp, message)
+                        result = await send_whatsapp(
+                            emp.phone_whatsapp,
+                            TEMPLATE_REMINDER_2,
+                            {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+                        )
                         reminder_2_log = MessageLog(
                             campaign_id=campaign.id,
                             employee_id=emp.id,
