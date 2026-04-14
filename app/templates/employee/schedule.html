@@ -10,20 +10,21 @@
 <body class="bg-gray-50 min-h-screen">
 <div class="max-w-2xl mx-auto px-4 py-8">
 
-    <div class="text-center mb-8">
+    <div class="text-center mb-6">
         <div class="text-2xl font-bold text-gray-800">Cześć, {{ employee.first_name }}! 👋</div>
         <div class="mt-2 inline-block bg-blue-600 text-white px-4 py-2 rounded-xl font-semibold text-lg">
             📅 Kalendarz na {{ month_name }} {{ year }}
         </div>
-        {% if existing %}
-        <div class="mt-3 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 inline-block">
-            ✅ Grafik został już wysłany.<br>
-            <span class="text-xs">Aby dokonać zmian, skontaktuj się z koordynatorem.</span>
-        </div>
-        {% else %}
-        <div class="text-gray-500 mt-2 text-sm">Zaznacz dni, w których jesteś dostępny do pracy.</div>
-        {% endif %}
     </div>
+
+    {% if existing %}
+    <div class="mb-6 bg-amber-50 border-2 border-amber-300 rounded-xl px-5 py-4 text-center">
+        <div class="text-amber-800 font-semibold text-base mb-1">✅ Grafik został już wysłany</div>
+        <div class="text-amber-700 text-sm">Aby dokonać zmian, skontaktuj się z koordynatorem.</div>
+    </div>
+    {% else %}
+    <div class="text-center mb-6 text-gray-500 text-sm">Zaznacz dni, w których jesteś dostępny do pracy.</div>
+    {% endif %}
 
     {% if existing %}
     <!-- Widok tylko do odczytu -->
