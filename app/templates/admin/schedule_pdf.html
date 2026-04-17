@@ -100,9 +100,7 @@
             <td>{{ day.day }}</td>
             <td>{{ ['Pon','Wt','Śr','Czw','Pt','Sob','Niedz'][day.weekday()] }}</td>
             <td>
-                {% if holiday_name %}
-                    🎉 {{ holiday_name }}
-                {% elif d %}
+                {% if d %}
                     {% if d.status.value == 'available' %}
                         <span class="status-available">✓ Dostępny</span>
                     {% elif d.status.value == 'partial' %}
@@ -110,6 +108,11 @@
                     {% else %}
                         <span class="status-unavailable">Niedostępny</span>
                     {% endif %}
+                    {% if holiday_name %}
+                        <span style="color: #be185d; font-size: 10px; margin-left: 4px;">🎉 {{ holiday_name }}</span>
+                    {% endif %}
+                {% elif holiday_name %}
+                    <span style="color: #be185d;">🎉 {{ holiday_name }}</span>
                 {% else %}
                     <span class="status-none">—</span>
                 {% endif %}

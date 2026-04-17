@@ -2,30 +2,58 @@
 {% block title %}Grafiki — {{ tenant.name }}{% endblock %}
 {% block content %}
 
+<div x-data="{
+    search: '',
+    filterMonth: '{{ now.month }}',
+    filterYear: '{{ now.year }}'
+}">
+
 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
     <div>
         <h1 class="text-xl font-bold text-gray-800">Zebrane grafiki — {{ tenant.name }}</h1>
         <span class="text-sm text-gray-400">{{ submissions|length }} wypełnionych</span>
     </div>
-    <!-- Filtr per osoba -->
-    <select onchange="
-            const url = new URL(window.location);
-            if (this.value) url.searchParams.set('employee_id', this.value);
-            else url.searchParams.delete('employee_id');
-            window.location.href = url.toString();"
-            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
-        <option value="">Wszyscy pracownicy</option>
-        {% for emp in employees %}
-        <option value="{{ emp.id }}" {% if selected_employee_id == emp.id %}selected{% endif %}>
-            {{ emp.last_name }} {{ emp.first_name }}
-        </option>
-        {% endfor %}
-    </select>
+    <div class="flex flex-wrap gap-2 items-center">
+        <!-- Szukaj po nazwisku/imieniu -->
+        <input
+            x-model="search"
+            type="text"
+            placeholder="Szukaj pracownika…"
+            class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-48"
+        >
+        <!-- Filtr miesiąca -->
+        <select x-model="filterMonth"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            <option value="">Wszystkie miesiące</option>
+            {% for num, name in month_names.items() %}
+            <option value="{{ num }}">{{ name }}</option>
+            {% endfor %}
+        </select>
+        <!-- Filtr roku -->
+        <select x-model="filterYear"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            <option value="">Wszystkie lata</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+            <option value="2027">2027</option>
+        </select>
+        <!-- Wyczyść filtry -->
+        <button @click="search = ''; filterMonth = ''; filterYear = ''"
+                class="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5">
+            Wyczyść
+        </button>
+    </div>
 </div>
 
 <div class="space-y-4">
     {% for sub in submissions %}
-    <div class="bg-white border border-gray-200 rounded-xl p-5">
+    <div
+        x-show="
+            (search === '' || '{{ sub.employee.last_name }} {{ sub.employee.first_name }}'.toLowerCase().includes(search.toLowerCase()) || '{{ sub.employee.first_name }} {{ sub.employee.last_name }}'.toLowerCase().includes(search.toLowerCase())) &&
+            (filterMonth === '' || '{{ sub.month }}' === filterMonth) &&
+            (filterYear === '' || '{{ sub.year }}' === filterYear)
+        "
+        class="bg-white border border-gray-200 rounded-xl p-5">
         <div class="flex items-center justify-between mb-3">
             <div>
                 <span class="font-semibold text-gray-800">
@@ -90,9 +118,10 @@
         {% endif %}
     </div>
     {% endfor %}
-    {% if not submissions %}
-    <div class="text-center text-gray-400 text-sm py-8">Brak wypełnionych grafików.</div>
-    {% endif %}
+    <div class="text-center text-gray-400 text-sm py-8"
+         x-show="{{ submissions|length }} === 0">Brak wypełnionych grafików.</div>
 </div>
+
+</div><!-- end x-data -->
 
 {% endblock %}
