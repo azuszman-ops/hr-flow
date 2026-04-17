@@ -511,11 +511,12 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
         )
     ).scalars().all() if campaigns else []
 
-    # Uzupełnione grafiki per kampania
+    # Uzupełnione grafiki — pobierz wszystkie dla tenant, pogrupuj po (year, month)
     all_submissions = (
         await db.execute(
             select(ScheduleSubmission)
-            .where(ScheduleSubmission.campaign_id.in_([c.id for c in campaigns]))
+            .join(Employee, ScheduleSubmission.employee_id == Employee.id)
+            .where(Employee.tenant_id == tenant_id)
         )
     ).scalars().all() if campaigns else []
 
@@ -535,7 +536,7 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
             elif log.is_reminder_2:
                 e["r2"] = log
         for sub in all_submissions:
-            if sub.campaign_id == camp.id:
+            if sub.year == camp.year and sub.month == camp.month:
                 emp_map[sub.employee_id]["filled"] = True
         campaign_stats[camp.id] = emp_map
 
