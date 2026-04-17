@@ -10,9 +10,8 @@
 <div class="bg-white border border-gray-200 rounded-xl p-5 mb-8"
      x-data="{
         open: false,
-        year: {{ default_year }},
-        month: {{ default_month }},
-        selectedContracts: [],
+        year: '{{ default_year }}',
+        month: '{{ default_month }}',
         confirmed: false,
         monthCampaigns: {{ month_campaigns | tojson }},
         get monthKey() { return this.year + '-' + String(this.month).padStart(2, '0'); },
@@ -23,97 +22,70 @@
         + Utwórz kampanię
     </button>
 
-    <div x-show="open" x-cloak class="mt-5 space-y-4">
+    <div x-show="open" x-cloak class="mt-5">
+        <form method="post" action="/admin/{{ tenant.id }}/campaigns/create" class="space-y-4">
 
-        <!-- Rok i miesiąc -->
-        <div class="flex gap-3 items-end">
-            <div>
-                <label class="text-xs text-gray-500 block mb-1">Rok</label>
-                <input type="number" x-model.number="year" min="2025" max="2030"
-                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
-            </div>
-            <div>
-                <label class="text-xs text-gray-500 block mb-1">Miesiąc</label>
-                <select x-model.number="month"
-                        class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                    {% for num, name in month_names.items() %}
-                    <option value="{{ num }}">{{ name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <!-- Ostrzeżenie jeśli miesiąc już ma kampanie -->
-        <template x-if="existingForMonth.length > 0 && !confirmed">
-            <div class="bg-amber-50 border border-amber-300 rounded-xl p-4">
-                <div class="text-sm font-semibold text-amber-800 mb-2">
-                    ⚠ Ten miesiąc już ma kampanię:
+            <!-- Rok i miesiąc -->
+            <div class="flex gap-3 items-end">
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Rok</label>
+                    <input type="number" name="year" x-model="year" min="2025" max="2030"
+                           @change="confirmed = false"
+                           class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
                 </div>
+                <div>
+                    <label class="text-xs text-gray-500 block mb-1">Miesiąc</label>
+                    <select name="month" x-model="month"
+                            @change="confirmed = false"
+                            class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        {% for num, name in month_names.items() %}
+                        <option value="{{ num }}" {% if num == default_month %}selected{% endif %}>{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Ostrzeżenie jeśli miesiąc już ma kampanie -->
+            <div x-show="existingForMonth.length > 0 && !confirmed"
+                 class="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                <div class="text-sm font-semibold text-amber-800 mb-2">⚠ Ten miesiąc już ma kampanię:</div>
                 <ul class="text-xs text-amber-700 space-y-1 mb-3">
                     <template x-for="c in existingForMonth" :key="c.label">
                         <li x-text="'• ' + c.label + ' (wysłana: ' + c.sent + ')'"></li>
                     </template>
                 </ul>
-                <button @click="confirmed = true"
+                <button type="button" @click="confirmed = true"
                         class="bg-amber-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-amber-700 transition">
                     Tak, chcę dodać kolejną kampanię
                 </button>
             </div>
-        </template>
 
-        <!-- Wybór kontraktów (pokazuj gdy brak konfliktu lub potwierdzono) -->
-        <div x-show="existingForMonth.length === 0 || confirmed">
-            <label class="text-xs text-gray-500 block mb-2">Wybierz kontrakty (puste = wszyscy pracownicy):</label>
-            <div class="flex flex-wrap gap-2">
-                {% for c in contracts %}
-                <label class="flex items-center gap-1.5 text-sm cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-300 transition"
-                       :class="selectedContracts.includes({{ c.id }}) ? 'bg-blue-50 border-blue-400' : ''">
-                    <input type="checkbox" :value="{{ c.id }}"
-                           @change="if ($event.target.checked) selectedContracts.push({{ c.id }}); else selectedContracts = selectedContracts.filter(id => id !== {{ c.id }})"
-                           class="rounded border-gray-300 text-blue-600">
-                    <span class="text-gray-700 font-medium">{{ c.name }}</span>
-                    {% if c.city_1 %}
-                    <span class="text-xs text-gray-400">{{ c.city_1 }}{% if c.city_2 %}/{{ c.city_2 }}{% endif %}</span>
+            <!-- Wybór kontraktów + submit (gdy brak konfliktu lub potwierdzono) -->
+            <div x-show="existingForMonth.length === 0 || confirmed" class="space-y-3">
+                <label class="text-xs text-gray-500 block">Wybierz kontrakty (puste = wszyscy pracownicy):</label>
+                <div class="flex flex-wrap gap-2">
+                    {% for c in contracts %}
+                    <label class="flex items-center gap-1.5 text-sm cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-300 transition has-[:checked]:bg-blue-50 has-[:checked]:border-blue-400">
+                        <input type="checkbox" name="contract_ids" value="{{ c.id }}"
+                               class="rounded border-gray-300 text-blue-600">
+                        <span class="text-gray-700 font-medium">{{ c.name }}</span>
+                        {% if c.city_1 %}
+                        <span class="text-xs text-gray-400">{{ c.city_1 }}{% if c.city_2 %}/{{ c.city_2 }}{% endif %}</span>
+                        {% endif %}
+                    </label>
+                    {% endfor %}
+                    {% if not contracts %}
+                    <span class="text-xs text-gray-400">Brak kontraktów — wyślij do wszystkich pracowników</span>
                     {% endif %}
-                </label>
-                {% endfor %}
-                {% if not contracts %}
-                <span class="text-xs text-gray-400">Brak kontraktów — wyślij do wszystkich pracowników</span>
-                {% endif %}
-            </div>
-            <div class="text-xs text-gray-400 mt-2"
-                 x-text="selectedContracts.length === 0 ? 'Wyślij do: wszyscy aktywni pracownicy' : 'Wyślij do pracowników z ' + selectedContracts.length + ' wybranych kontrakt(ów)'">
-            </div>
+                </div>
 
-            <!-- Podgląd nazwy kampanii -->
-            <div class="mt-3 text-xs text-gray-500 italic" x-text="
-                'Nazwa kampanii: ' +
-                (selectedContracts.length === 0
-                    ? '{{ month_names[default_month] }} ' + year + ' — wszyscy pracownicy'
-                    : '{{ month_names[default_month] }} ' + year + ' — ' + selectedContracts.length + ' kontrakt(ów)')
-            "></div>
-
-            <!-- Formularz submit -->
-            <form method="post" :action="'/admin/{{ tenant.id }}/campaigns/create'" class="mt-4"
-                  @submit.prevent="
-                    const form = $el;
-                    selectedContracts.forEach(id => {
-                        const input = document.createElement('input');
-                        input.type = 'hidden';
-                        input.name = 'contract_ids';
-                        input.value = id;
-                        form.appendChild(input);
-                    });
-                    form.submit();
-                  ">
-                <input type="hidden" name="year" :value="year">
-                <input type="hidden" name="month" :value="month">
                 <button type="submit"
                         class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
                     Utwórz kampanię
                 </button>
-            </form>
-        </div>
+            </div>
+
+        </form>
     </div>
 </div>
 
