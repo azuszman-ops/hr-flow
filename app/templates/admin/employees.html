@@ -2,9 +2,15 @@
 {% block title %}Pracownicy — {{ tenant.name }}{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
-    <h1 class="text-xl font-bold text-gray-800">Pracownicy — {{ tenant.name }}</h1>
-    <span class="text-sm text-gray-400">{{ employees|length }} osób</span>
+<div x-data="{ search: '' }">
+
+<div class="flex items-center justify-between mb-4">
+    <div>
+        <h1 class="text-xl font-bold text-gray-800">Pracownicy — {{ tenant.name }}</h1>
+        <span class="text-sm text-gray-400">{{ employees|length }} osób</span>
+    </div>
+    <input x-model="search" type="text" placeholder="Szukaj pracownika…"
+           class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-52">
 </div>
 
 <!-- Import CSV -->
@@ -24,6 +30,7 @@
             <code class="bg-white px-1 rounded border">imie</code>,
             <code class="bg-white px-1 rounded border">nazwisko</code>,
             <code class="bg-white px-1 rounded border">telefon_whatsapp</code>,
+            <code class="bg-white px-1 rounded border">email</code>,
             <code class="bg-white px-1 rounded border">kontrakt</code>
             (nazwa kontraktu — opcjonalnie).<br>
             Pracownicy z tym samym numerem WhatsApp zostaną pominięci.
@@ -99,21 +106,17 @@
                 <th class="px-4 py-3 text-left">WhatsApp</th>
                 <th class="px-4 py-3 text-left">Viber</th>
                 <th class="px-4 py-3 text-left">Email</th>
-                <th class="px-4 py-3 text-left">Link grafiku</th>
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
             {% for emp in employees %}
-            <tr class="hover:bg-gray-50">
+            <tr class="hover:bg-gray-50"
+                x-show="search === '' || '{{ emp.last_name }} {{ emp.first_name }}'.toLowerCase().includes(search.toLowerCase()) || '{{ emp.first_name }} {{ emp.last_name }}'.toLowerCase().includes(search.toLowerCase())">
                 <td class="px-4 py-3 font-medium text-gray-800">{{ emp.first_name }} {{ emp.last_name }}</td>
                 <td class="px-4 py-3 text-gray-500">{{ emp.phone_whatsapp or "—" }}</td>
                 <td class="px-4 py-3 text-gray-500">{{ emp.phone_viber or "—" }}</td>
                 <td class="px-4 py-3 text-gray-500">{{ emp.email or "—" }}</td>
-                <td class="px-4 py-3">
-                    <a href="/schedule/{{ emp.token }}" target="_blank"
-                       class="text-blue-500 hover:underline text-xs">Otwórz link</a>
-                </td>
                 <td class="px-4 py-3 text-right flex justify-end gap-3">
                     <a href="/admin/{{ tenant.id }}/employees/{{ emp.id }}/edit"
                        class="text-blue-500 hover:text-blue-700 text-xs">Edytuj</a>
@@ -130,5 +133,7 @@
     <div class="px-4 py-8 text-center text-gray-400 text-sm">Brak pracowników. Dodaj pierwszego powyżej.</div>
     {% endif %}
 </div>
+
+</div><!-- end x-data search -->
 
 {% endblock %}
