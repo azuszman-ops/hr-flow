@@ -1103,7 +1103,7 @@ async def reset_password_submit(
 
 @router.get("/admin/{tenant_id}/employees/import/template")
 async def csv_template(tenant_id: int, _: Tenant = Depends(get_authed_tenant)):
-    content = "imie,nazwisko,telefon_whatsapp,kontrakt\nJan,Kowalski,+48123456789,Magazyn Warszawa\nAnna,Nowak,+48987654321,\n"
+    content = "imie,nazwisko,telefon_whatsapp,email,kontrakt\nJan,Kowalski,+48123456789,jan.kowalski@firma.pl,Magazyn Warszawa\nAnna,Nowak,+48987654321,anna.nowak@firma.pl,\n"
     return StreamingResponse(
         io.StringIO(content),
         media_type="text/csv",
@@ -1138,6 +1138,7 @@ async def import_employees_csv(
         first_name = (row.get("imie") or row.get("first_name") or "").strip()
         last_name = (row.get("nazwisko") or row.get("last_name") or "").strip()
         phone = (row.get("telefon_whatsapp") or row.get("telefon") or row.get("phone_whatsapp") or "").strip()
+        email = (row.get("email") or row.get("e-mail") or "").strip()
         contract_name = (row.get("kontrakt") or row.get("contract") or "").strip()
 
         if not first_name or not last_name:
@@ -1162,6 +1163,7 @@ async def import_employees_csv(
             first_name=first_name,
             last_name=last_name,
             phone_whatsapp=phone or None,
+            email=email or None,
         )
         db.add(emp)
         await db.flush()
