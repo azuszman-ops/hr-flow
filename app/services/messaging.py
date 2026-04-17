@@ -5,6 +5,10 @@ import json
 import os
 import re
 from twilio.rest import Client as TwilioClient
+try:
+    from twilio.base.exceptions import TwilioRestException
+except ImportError:
+    TwilioRestException = Exception
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
@@ -47,6 +51,7 @@ async def send_whatsapp(to_phone: str, template_sid: str, variables: dict) -> di
     Wysyła wiadomość WhatsApp przez Twilio Content Template.
     to_phone format: +48XXXXXXXXX
     variables: {"1": first_name, "2": month_name, "3": schedule_link}
+    Returns status: "sent" | "failed" | "rate_limited"
     """
     if not TWILIO_SID or not TWILIO_TOKEN or not TWILIO_WHATSAPP_FROM:
         print("[WHATSAPP] ERROR: Twilio credentials not configured")
@@ -63,6 +68,24 @@ async def send_whatsapp(to_phone: str, template_sid: str, variables: dict) -> di
         )
         print(f"[WHATSAPP] Success: {msg.sid}")
         return {"status": "sent", "external_id": msg.sid}
+    except TwilioRestException as e:
+        error_str = str(e).lower()
+        # Detect WhatsApp daily quota / rate limit errors
+        # Meta error codes: 130429 (rate limit), 131056 (pair rate limit)
+        # Twilio error codes: 63018, 63038 (quota exceeded)
+        is_rate_limited = (
+            getattr(e, "code", None) in (63018, 63038)
+            or "rate limit" in error_str
+            or "quota" in error_str
+            or "130429" in error_str
+            or "131056" in error_str
+            or "1015" in error_str
+        )
+        if is_rate_limited:
+            print(f"[WHATSAPP] RATE LIMITED: {e}")
+            return {"status": "rate_limited", "error": str(e)}
+        print(f"[WHATSAPP] ERROR: {e}")
+        return {"status": "failed", "error": str(e)}
     except Exception as e:
         print(f"[WHATSAPP] ERROR: {e}")
         return {"status": "failed", "error": str(e)}

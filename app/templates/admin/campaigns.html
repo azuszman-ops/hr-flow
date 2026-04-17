@@ -140,14 +140,16 @@ function checkCampaignConflict(form) {
         </div>
 
         <div x-show="result" class="mt-3 text-sm space-y-1">
-            <div>
+            <div x-show="!result?.outside_window">
                 <span class="text-green-600 font-medium" x-text="'✓ Wysłano: ' + (result?.sent ?? 0)"></span>
                 <span class="text-red-500 ml-3" x-text="result?.failed ? '✗ Błędy: ' + result.failed : ''"></span>
             </div>
+            <div x-show="result?.outside_window" class="text-orange-600 text-xs font-medium">
+                ⏰ Poza godzinami wysyłki (09:00–17:00).
+            </div>
             <div x-show="result?.queued > 0" class="text-blue-600 text-xs">
                 ⏳ <span x-text="result?.queued"></span> wiadomości zakolejkowanych
-                — wyślemy <span x-text="result?.queue_date"></span> o 00:05 UTC
-                (limit dzienny: <span x-text="result?.limit"></span>)
+                — wyślemy <span x-text="result?.queue_date"></span>
             </div>
             <div class="text-gray-400 text-xs">
                 <span x-text="result?.invalid ? 'Pominięto (błędny nr): ' + result.invalid + '  ' : ''"></span>

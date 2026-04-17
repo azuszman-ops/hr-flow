@@ -60,7 +60,6 @@
             {% for link in employee.contract_links %}
             <form method="post"
                   action="/admin/{{ tenant.id }}/employees/{{ employee.id }}/remove_contract/{{ link.contract_id }}"
-                  onsubmit="return confirm('Odpiąć kontrakt {{ link.contract.name }}?')"
                   class="inline">
                 <input type="hidden" name="redirect" value="edit">
                 <button type="submit"

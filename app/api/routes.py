@@ -4,12 +4,17 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, func
 from sqlalchemy.orm import selectinload
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
+from zoneinfo import ZoneInfo
 import calendar
 import csv
 import io
 import os
+
+WARSAW_TZ = ZoneInfo("Europe/Warsaw")
+SEND_HOUR_START = 9
+SEND_HOUR_END = 17
 from app.auth import (
     get_authed_tenant, hash_password, verify_password, NeedsLogin,
     generate_reset_token, verify_reset_token, send_reset_email,
@@ -723,13 +728,16 @@ async def send_campaign(
     db: AsyncSession = Depends(get_db),
     _: Tenant = Depends(get_authed_tenant),
 ):
-    """Wysyła wiadomości WhatsApp. Jeśli limit dobowy przekroczony — kolejkuje na jutro."""
-    from datetime import timezone as tz
+    """Wysyła wiadomości WhatsApp.
+    - Szanuje okno 09:00–17:00 czasu warszawskiego
+    - Wykrywa limit Twilio dynamicznie (zatrzymuje się przy błędzie rate_limited)
+    - Kolejkuje pozostałe na następny dzień o 09:00 Warsaw
+    """
     campaign = await db.get(MessageCampaign, campaign_id)
     if not campaign or campaign.tenant_id != tenant_id:
         raise HTTPException(404)
 
-    # Pobierz kontrakty przypisane do tej kampanii
+    # Pobierz kontrakty kampanii
     campaign_contract_rows = (await db.execute(
         select(CampaignContract).where(CampaignContract.campaign_id == campaign_id)
     )).scalars().all()
@@ -764,41 +772,61 @@ async def send_campaign(
     invalid_count = len([e for e in unique_employees if e.phone_whatsapp and not validate_phone(e.phone_whatsapp)])
     no_phone_count = len([e for e in unique_employees if not e.phone_whatsapp])
 
-    # Pomiń już zakolejkowanych (żeby uniknąć duplikatów przy ponownym kliknięciu)
+    # Pomiń już zakolejkowanych
     already_queued_ids = set((await db.execute(
         select(QueuedSend.employee_id).where(QueuedSend.campaign_id == campaign_id)
     )).scalars().all())
     valid_employees = [e for e in valid_employees if e.id not in already_queued_ids]
 
-    # Sprawdź ile wiadomości wysłano dziś dla tego tenanta
-    now_utc = datetime.now(tz.utc)
-    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_sent_count = (await db.execute(
-        select(func.count(MessageLog.id))
-        .join(MessageCampaign, MessageLog.campaign_id == MessageCampaign.id)
-        .where(
-            MessageCampaign.tenant_id == tenant_id,
-            MessageLog.status == "sent",
-            MessageLog.is_reminder == False,
-            MessageLog.is_reminder_2 == False,
-            MessageLog.sent_at >= today_start,
-        )
-    )).scalar() or 0
+    now_warsaw = datetime.now(WARSAW_TZ)
 
-    capacity_today = max(0, DAILY_LIMIT - today_sent_count)
-    send_now = valid_employees[:capacity_today]
-    send_later = valid_employees[capacity_today:]
+    def next_send_window_str() -> str:
+        """Zwraca opis następnego okna wysyłki."""
+        if now_warsaw.hour >= SEND_HOUR_END:
+            next_day = (now_warsaw + timedelta(days=1)).strftime("%d.%m")
+        else:
+            next_day = now_warsaw.strftime("%d.%m")
+        return f"{next_day} o {SEND_HOUR_START:02d}:00"
 
+    def queue_all():
+        for emp in valid_employees:
+            db.add(QueuedSend(campaign_id=campaign_id, employee_id=emp.id))
+
+    # Sprawdź okno godzinowe 09:00–17:00 Warsaw
+    outside_window = not (SEND_HOUR_START <= now_warsaw.hour < SEND_HOUR_END)
+    if outside_window:
+        queue_all()
+        campaign.status = CampaignStatus.sent
+        campaign.sent_at = datetime.now()
+        await db.commit()
+        return JSONResponse({
+            "sent": 0, "failed": 0,
+            "queued": len(valid_employees),
+            "queue_date": next_send_window_str(),
+            "outside_window": True,
+            "invalid": invalid_count, "no_phone": no_phone_count,
+        })
+
+    # Wyślij dynamicznie — zatrzymaj się przy błędzie rate_limited
     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
     sent, failed = 0, 0
+    queued_count = 0
 
-    for emp in send_now:
+    for i, emp in enumerate(valid_employees):
         link = build_schedule_link(emp.token, campaign.year, campaign.month)
         result = await send_whatsapp(
             emp.phone_whatsapp,
             TEMPLATE_INITIAL,
             {"1": emp.first_name, "2": month_name, "3": link},
         )
+
+        if result["status"] == "rate_limited":
+            # Kolejkuj bieżącego i wszystkich pozostałych
+            for rem_emp in valid_employees[i:]:
+                db.add(QueuedSend(campaign_id=campaign_id, employee_id=rem_emp.id))
+            queued_count = len(valid_employees) - i
+            break
+
         db.add(MessageLog(
             campaign_id=campaign_id,
             employee_id=emp.id,
@@ -813,28 +841,17 @@ async def send_campaign(
         else:
             failed += 1
 
-    # Kolejkuj resztę na jutro (limit zostanie odnowiony o 00:00 UTC)
-    for emp in send_later:
-        db.add(QueuedSend(campaign_id=campaign_id, employee_id=emp.id))
-
     campaign.status = CampaignStatus.sent
     campaign.sent_at = datetime.now()
     await db.commit()
 
-    # Czas odnowienia: jutro o 00:05 UTC
-    from datetime import date as date_cls
-    import datetime as dt_module
-    tomorrow = (now_utc + dt_module.timedelta(days=1)).strftime("%d.%m")
-
     return JSONResponse({
         "sent": sent,
         "failed": failed,
-        "queued": len(send_later),
-        "queue_date": tomorrow,
+        "queued": queued_count,
+        "queue_date": next_send_window_str() if queued_count else "",
         "invalid": invalid_count,
         "no_phone": no_phone_count,
-        "limit": DAILY_LIMIT,
-        "today_sent": today_sent_count,
     })
 
 

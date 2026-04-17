@@ -188,8 +188,9 @@ async def send_follow_up_reminders():
 
 async def send_queued_messages():
     """
-    Wysyła zakolejkowane wiadomości początkowe (uruchamiane o 00:05 UTC po odnowieniu limitu).
+    Wysyła zakolejkowane wiadomości początkowe (uruchamiane o 09:00 Warsaw).
     Pomija pracowników, którzy już wypełnili grafik.
+    Zatrzymuje się przy błędzie rate_limited.
     """
     logger.info("[Scheduler] Starting queued messages job")
     async with AsyncSessionLocal() as db:
@@ -204,17 +205,20 @@ async def send_queued_messages():
             logger.info("[Scheduler] No queued messages")
             return
 
-        # Grupuj po kampanii, wysyłaj do limitu łącznie
         sent_today = 0
+        rate_limited = False
+
         for item in queued:
-            if sent_today >= DAILY_LIMIT:
-                break
+            if rate_limited:
+                break  # Leave remaining items for next day
+
             campaign = item.campaign
             emp = item.employee
             if not emp or not emp.is_active or not emp.phone_whatsapp:
                 await db.delete(item)
                 continue
-            # Sprawdź czy już wypełnił grafik
+
+            # Skip if employee already submitted schedule
             submission = (await db.execute(
                 select(ScheduleSubmission).where(
                     ScheduleSubmission.employee_id == emp.id,
@@ -232,6 +236,13 @@ async def send_queued_messages():
                 TEMPLATE_INITIAL,
                 {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token, campaign.year, campaign.month)},
             )
+
+            if result["status"] == "rate_limited":
+                # Leave this item and all remaining in queue for tomorrow
+                rate_limited = True
+                logger.warning("[Scheduler] Rate limit hit — stopping, %d items remain queued", len(queued) - queued.index(item))
+                break
+
             db.add(MessageLog(
                 campaign_id=campaign.id,
                 employee_id=emp.id,
@@ -256,19 +267,19 @@ async def send_queued_messages():
 def start_scheduler():
     """Rejestruje zadania i startuje scheduler."""
     scheduler.add_job(
-        send_follow_up_reminders,
-        trigger=CronTrigger(hour=9, minute=0, timezone="UTC"),
-        id="follow_up_reminders",
-        replace_existing=True,
-    )
-    scheduler.add_job(
         send_queued_messages,
-        trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+        trigger=CronTrigger(hour=9, minute=0, timezone="Europe/Warsaw"),
         id="send_queued_messages",
         replace_existing=True,
     )
+    scheduler.add_job(
+        send_follow_up_reminders,
+        trigger=CronTrigger(hour=9, minute=15, timezone="Europe/Warsaw"),
+        id="follow_up_reminders",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("[Scheduler] Started — reminders at 09:00 UTC, queued sends at 00:05 UTC")
+    logger.info("[Scheduler] Started — queued sends 09:00 Warsaw, reminders 09:15 Warsaw")
 
 
 def stop_scheduler():
