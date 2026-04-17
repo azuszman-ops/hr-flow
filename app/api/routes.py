@@ -729,7 +729,7 @@ async def send_campaign(
     _: Tenant = Depends(get_authed_tenant),
 ):
     """Wysyła wiadomości WhatsApp.
-    - Szanuje okno 09:00–17:00 czasu warszawskiego
+    - Wysyła natychmiast bez względu na godzinę (ręczna wysyłka)
     - Wykrywa limit Twilio dynamicznie (zatrzymuje się przy błędzie rate_limited)
     - Kolejkuje pozostałe na następny dzień o 09:00 Warsaw
     """
@@ -781,31 +781,9 @@ async def send_campaign(
     now_warsaw = datetime.now(WARSAW_TZ)
 
     def next_send_window_str() -> str:
-        """Zwraca opis następnego okna wysyłki."""
-        if now_warsaw.hour >= SEND_HOUR_END:
-            next_day = (now_warsaw + timedelta(days=1)).strftime("%d.%m")
-        else:
-            next_day = now_warsaw.strftime("%d.%m")
+        """Zwraca opis następnego okna wysyłki (jutro o 09:00)."""
+        next_day = (now_warsaw + timedelta(days=1)).strftime("%d.%m")
         return f"{next_day} o {SEND_HOUR_START:02d}:00"
-
-    def queue_all():
-        for emp in valid_employees:
-            db.add(QueuedSend(campaign_id=campaign_id, employee_id=emp.id))
-
-    # Sprawdź okno godzinowe 09:00–17:00 Warsaw
-    outside_window = not (SEND_HOUR_START <= now_warsaw.hour < SEND_HOUR_END)
-    if outside_window:
-        queue_all()
-        campaign.status = CampaignStatus.sent
-        campaign.sent_at = datetime.now()
-        await db.commit()
-        return JSONResponse({
-            "sent": 0, "failed": 0,
-            "queued": len(valid_employees),
-            "queue_date": next_send_window_str(),
-            "outside_window": True,
-            "invalid": invalid_count, "no_phone": no_phone_count,
-        })
 
     # Wyślij dynamicznie — zatrzymaj się przy błędzie rate_limited
     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
