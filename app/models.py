@@ -118,6 +118,7 @@ class ScheduleSubmission(Base):
     month = Column(Integer, nullable=False)   # 1-12
     submitted_at = Column(DateTime(timezone=True), server_default=func.now())
     notes = Column(Text, nullable=True)
+    location_choice = Column(String(200), nullable=True)  # wybrane miasto (jeśli kontrakt ma 2)
 
     employee = relationship("Employee", back_populates="submissions")
     days = relationship("AvailabilityDay", back_populates="submission", cascade="all, delete")
@@ -165,6 +166,7 @@ class MessageCampaign(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=False)
     year = Column(Integer, nullable=False)
     month = Column(Integer, nullable=False)
+    name = Column(String(300), nullable=True)  # np. "Maj 2026 — Panatoni Wrocław, Magazyn X"
     status = Column(SAEnum(CampaignStatus), default=CampaignStatus.pending)
     confirmed_by = Column(String(200), nullable=True)
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
@@ -173,6 +175,22 @@ class MessageCampaign(Base):
 
     tenant = relationship("Tenant", back_populates="campaigns")
     logs = relationship("MessageLog", back_populates="campaign", cascade="all, delete")
+    campaign_contracts = relationship("CampaignContract", back_populates="campaign", cascade="all, delete")
+
+
+# ---------------------------------------------------------------------------
+# CampaignContract — kontrakty przypisane do kampanii
+# ---------------------------------------------------------------------------
+class CampaignContract(Base):
+    __tablename__ = "campaign_contracts"
+    __table_args__ = (UniqueConstraint("campaign_id", "contract_id"),)
+
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("message_campaigns.id"), nullable=False)
+    contract_id = Column(Integer, ForeignKey("contracts.id"), nullable=False)
+
+    campaign = relationship("MessageCampaign", back_populates="campaign_contracts")
+    contract = relationship("Contract")
 
 
 # ---------------------------------------------------------------------------

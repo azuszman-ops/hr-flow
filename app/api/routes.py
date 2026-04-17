@@ -59,7 +59,7 @@ from app.database import get_db
 from app.models import (
     Tenant, Contract, Employee, ContractEmployee,
     ScheduleSubmission, AvailabilityDay, AvailabilityStatus,
-    MessageTemplate, MessageCampaign, MessageLog, MessageChannel, CampaignStatus,
+    MessageTemplate, MessageCampaign, CampaignContract, MessageLog, MessageChannel, CampaignStatus,
     TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
@@ -296,6 +296,46 @@ async def edit_contract(
     return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
 
 
+@router.get("/admin/{tenant_id}/contracts/import/template")
+async def contracts_csv_template(tenant_id: int, _: Tenant = Depends(get_authed_tenant)):
+    content = "nazwa,miasto_1,miasto_2\nMagazyn Warszawa,Warszawa,\nPanatoni Wrocław/Poznań,Wrocław,Poznań\n"
+    return StreamingResponse(
+        io.StringIO(content),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=szablon_kontrakty.csv"},
+    )
+
+
+@router.post("/admin/{tenant_id}/contracts/import")
+async def import_contracts_csv(
+    tenant_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
+):
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = content.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    imported, skipped = 0, 0
+
+    for row in reader:
+        name = (row.get("nazwa") or row.get("name") or "").strip()
+        city_1 = (row.get("miasto_1") or row.get("city_1") or "").strip() or None
+        city_2 = (row.get("miasto_2") or row.get("city_2") or "").strip() or None
+        if not name:
+            skipped += 1
+            continue
+        db.add(Contract(tenant_id=tenant_id, name=name, city_1=city_1, city_2=city_2))
+        imported += 1
+
+    await db.commit()
+    return JSONResponse({"imported": imported, "skipped": skipped})
+
+
 @router.get("/admin/{tenant_id}/contracts/{contract_id}", response_class=HTMLResponse)
 async def contract_detail(
     request: Request, tenant_id: int, contract_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)
@@ -485,14 +525,24 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
             .order_by(MessageCampaign.year.desc(), MessageCampaign.month.desc())
         )
     ).scalars().all()
-    employees = (
-        await db.execute(select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True))
-    ).scalars().all()
     contracts = (
         await db.execute(
             select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
         )
     ).scalars().all()
+
+    # Kontrakty przypisane do każdej kampanii
+    from collections import defaultdict
+    all_campaign_contracts = (
+        await db.execute(
+            select(CampaignContract)
+            .options(selectinload(CampaignContract.contract))
+            .where(CampaignContract.campaign_id.in_([c.id for c in campaigns]))
+        )
+    ).scalars().all() if campaigns else []
+    campaign_contracts: dict = defaultdict(list)
+    for cc in all_campaign_contracts:
+        campaign_contracts[cc.campaign_id].append(cc.contract)
 
     # Logi wiadomości per kampania
     all_logs = (
@@ -513,7 +563,6 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
     ).scalars().all() if campaigns else []
 
     # Zbuduj słownik: campaign_id -> {employee_id -> {initial, r1, r2, filled}}
-    from collections import defaultdict
     campaign_stats = {}
     for camp in campaigns:
         emp_map = defaultdict(lambda: {"initial": None, "r1": None, "r2": None, "filled": False})
@@ -537,35 +586,58 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
         default_year, default_month = now.year + 1, 1
     else:
         default_year, default_month = now.year, now.month + 1
+
+    # Dla ostrzeżenia: miesiące które już mają kampanie -> lista etykiet
+    month_campaigns: dict = defaultdict(list)
+    for camp in campaigns:
+        key = f"{camp.year}-{camp.month:02d}"
+        cc_names = ", ".join(c.name for c in campaign_contracts.get(camp.id, []))
+        label = camp.name or cc_names or "wszyscy"
+        sent_str = camp.sent_at.strftime("%d.%m.%Y") if camp.sent_at else "niewysłana"
+        month_campaigns[key].append({"label": label, "sent": sent_str})
+
     return templates.TemplateResponse("admin/campaigns.html", {
         "request": request, "tenant": tenant, "campaigns": campaigns,
-        "employees": employees, "contracts": contracts,
+        "contracts": contracts, "campaign_contracts": campaign_contracts,
         "campaign_stats": campaign_stats,
         "now": now, "default_year": default_year, "default_month": default_month,
-        "month_names": MONTH_NAMES_PL
+        "month_names": MONTH_NAMES_PL, "month_campaigns": dict(month_campaigns),
     })
 
 
 @router.post("/admin/{tenant_id}/campaigns/create")
 async def create_campaign(
+    request: Request,
     tenant_id: int,
     year: int = Form(...),
     month: int = Form(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
 ):
-    existing = (await db.execute(
-        select(MessageCampaign).where(
-            MessageCampaign.tenant_id == tenant_id,
-            MessageCampaign.year == year,
-            MessageCampaign.month == month,
-        )
-    )).scalar_one_or_none()
-    if not existing:
-        campaign = MessageCampaign(tenant_id=tenant_id, year=year, month=month)
-        db.add(campaign)
-        await db.commit()
-        return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
-    return RedirectResponse(f"/admin/{tenant_id}/campaigns?error=exists", status_code=303)
+    form = await request.form()
+    raw_contract_ids = form.getlist("contract_ids")
+    contract_ids: List[int] = [int(c) for c in raw_contract_ids if c]
+
+    # Generuj nazwę kampanii
+    month_name = MONTH_NAMES_PL.get(month, str(month))
+    if contract_ids:
+        contract_rows = (await db.execute(
+            select(Contract).where(Contract.id.in_(contract_ids))
+        )).scalars().all()
+        contract_names = ", ".join(c.name for c in contract_rows)
+        campaign_name = f"{month_name} {year} — {contract_names}"
+    else:
+        campaign_name = f"{month_name} {year} — wszyscy pracownicy"
+
+    campaign = MessageCampaign(tenant_id=tenant_id, year=year, month=month, name=campaign_name)
+    db.add(campaign)
+    await db.flush()
+
+    for cid in contract_ids:
+        db.add(CampaignContract(campaign_id=campaign.id, contract_id=cid))
+
+    await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
 
 
 @router.post("/admin/{tenant_id}/campaigns/{campaign_id}/send")
@@ -576,38 +648,42 @@ async def send_campaign(
     db: AsyncSession = Depends(get_db),
     _: Tenant = Depends(get_authed_tenant),
 ):
-    """Wysyła wiadomości WhatsApp do aktywnych pracowników (opcjonalnie filtrowanych po kontraktach)."""
+    """Wysyła wiadomości WhatsApp do pracowników z kontraktów przypisanych do kampanii."""
     campaign = await db.get(MessageCampaign, campaign_id)
     if not campaign or campaign.tenant_id != tenant_id:
         raise HTTPException(404)
 
-    # Odczytaj contract_ids z form data (może być wiele wartości)
-    form = await request.form()
-    raw_contract_ids = form.getlist("contract_ids")
-    contract_ids: List[int] = [int(c) for c in raw_contract_ids if c]
+    # Pobierz kontrakty przypisane do tej kampanii
+    campaign_contract_rows = (await db.execute(
+        select(CampaignContract).where(CampaignContract.campaign_id == campaign_id)
+    )).scalars().all()
+    contract_ids = [cc.contract_id for cc in campaign_contract_rows]
 
     if contract_ids:
-        # Pobierz pracowników przypisanych do wybranych kontraktów
-        rows = (
-            await db.execute(
-                select(Employee)
-                .join(ContractEmployee, ContractEmployee.employee_id == Employee.id)
-                .where(
-                    Employee.tenant_id == tenant_id,
-                    Employee.is_active == True,
-                    ContractEmployee.contract_id.in_(contract_ids),
-                )
-                .distinct()
+        employees = (await db.execute(
+            select(Employee)
+            .join(ContractEmployee, ContractEmployee.employee_id == Employee.id)
+            .where(
+                Employee.tenant_id == tenant_id,
+                Employee.is_active == True,
+                ContractEmployee.contract_id.in_(contract_ids),
             )
-        ).scalars().all()
-        employees = rows
+            .distinct()
+        )).scalars().all()
     else:
-        # Wszyscy aktywni pracownicy tenanta
-        employees = (
-            await db.execute(
-                select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
-            )
-        ).scalars().all()
+        # Brak przypisanych kontraktów → wszyscy aktywni
+        employees = (await db.execute(
+            select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+        )).scalars().all()
+
+    # Deduplikacja — pracownik może być w wielu kontraktach
+    seen_ids: set = set()
+    unique_employees = []
+    for emp in employees:
+        if emp.id not in seen_ids:
+            seen_ids.add(emp.id)
+            unique_employees.append(emp)
+    employees = unique_employees
 
     # Pobierz ustawienia tenanta (szablon wiadomości)
     tenant_settings = (
@@ -868,6 +944,15 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
         for d in existing.days:
             existing_days[d.date.isoformat()] = {"status": d.status.value, "from": d.hour_from, "to": d.hour_to}
 
+    # Kontrakt pracownika (do wyświetlenia w formularzu)
+    contract_links = (await db.execute(
+        select(ContractEmployee)
+        .options(selectinload(ContractEmployee.contract))
+        .where(ContractEmployee.employee_id == emp.id)
+    )).scalars().all()
+    active_contracts = [link.contract for link in contract_links if link.contract.is_active]
+    location_contract = next((c for c in active_contracts if c.city_1), None) or (active_contracts[0] if active_contracts else None)
+
     return templates.TemplateResponse("employee/schedule.html", {
         "request": request,
         "employee": emp,
@@ -880,6 +965,7 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
         "days": days,
         "existing": existing,
         "existing_days": existing_days,
+        "location_contract": location_contract,
     })
 
 
@@ -913,6 +999,7 @@ async def submit_schedule(request: Request, token: str, db: AsyncSession = Depen
         year=year,
         month=month,
         notes=form.get("notes", ""),
+        location_choice=form.get("location_choice") or None,
     )
     db.add(submission)
     await db.flush()

@@ -6,45 +6,128 @@
     <h1 class="text-xl font-bold text-gray-800">Kampanie wysyłkowe — {{ tenant.name }}</h1>
 </div>
 
-{% if request.query_params.get('error') == 'exists' %}
-<div class="bg-amber-50 border border-amber-300 text-amber-700 rounded-xl px-4 py-3 mb-4 text-sm">
-    Kampania na ten miesiąc już istnieje — możesz ją wysłać ponownie poniżej.
-</div>
-{% endif %}
+<!-- Utwórz kampanię -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-8"
+     x-data="{
+        open: false,
+        year: {{ default_year }},
+        month: {{ default_month }},
+        selectedContracts: [],
+        confirmed: false,
+        monthCampaigns: {{ month_campaigns | tojson }},
+        get monthKey() { return this.year + '-' + String(this.month).padStart(2, '0'); },
+        get existingForMonth() { return this.monthCampaigns[this.monthKey] || []; }
+     }">
 
-<!-- Nowa kampania -->
-<div class="bg-white border border-gray-200 rounded-xl p-5 mb-8">
-    <h2 class="font-semibold text-gray-700 mb-3">Utwórz kampanię na miesiąc</h2>
-    <form method="post" action="/admin/{{ tenant.id }}/campaigns/create" class="flex gap-3 items-end">
-        <div>
-            <label class="text-xs text-gray-500 block mb-1">Rok</label>
-            <input name="year" type="number" value="{{ default_year }}" min="2025" max="2030"
-                   class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
+    <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">
+        + Utwórz kampanię
+    </button>
+
+    <div x-show="open" x-cloak class="mt-5 space-y-4">
+
+        <!-- Rok i miesiąc -->
+        <div class="flex gap-3 items-end">
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Rok</label>
+                <input type="number" x-model.number="year" min="2025" max="2030"
+                       class="border border-gray-300 rounded-lg px-3 py-2 text-sm w-24 focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 block mb-1">Miesiąc</label>
+                <select x-model.number="month"
+                        class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    {% for num, name in month_names.items() %}
+                    <option value="{{ num }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
         </div>
-        <div>
-            <label class="text-xs text-gray-500 block mb-1">Miesiąc</label>
-            <select name="month" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
-                {% for num, name in month_names.items() %}
-                <option value="{{ num }}" {% if num == default_month %}selected{% endif %}>{{ name }}</option>
+
+        <!-- Ostrzeżenie jeśli miesiąc już ma kampanie -->
+        <template x-if="existingForMonth.length > 0 && !confirmed">
+            <div class="bg-amber-50 border border-amber-300 rounded-xl p-4">
+                <div class="text-sm font-semibold text-amber-800 mb-2">
+                    ⚠ Ten miesiąc już ma kampanię:
+                </div>
+                <ul class="text-xs text-amber-700 space-y-1 mb-3">
+                    <template x-for="c in existingForMonth" :key="c.label">
+                        <li x-text="'• ' + c.label + ' (wysłana: ' + c.sent + ')'"></li>
+                    </template>
+                </ul>
+                <button @click="confirmed = true"
+                        class="bg-amber-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-amber-700 transition">
+                    Tak, chcę dodać kolejną kampanię
+                </button>
+            </div>
+        </template>
+
+        <!-- Wybór kontraktów (pokazuj gdy brak konfliktu lub potwierdzono) -->
+        <div x-show="existingForMonth.length === 0 || confirmed">
+            <label class="text-xs text-gray-500 block mb-2">Wybierz kontrakty (puste = wszyscy pracownicy):</label>
+            <div class="flex flex-wrap gap-2">
+                {% for c in contracts %}
+                <label class="flex items-center gap-1.5 text-sm cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-300 transition"
+                       :class="selectedContracts.includes({{ c.id }}) ? 'bg-blue-50 border-blue-400' : ''">
+                    <input type="checkbox" :value="{{ c.id }}"
+                           @change="if ($event.target.checked) selectedContracts.push({{ c.id }}); else selectedContracts = selectedContracts.filter(id => id !== {{ c.id }})"
+                           class="rounded border-gray-300 text-blue-600">
+                    <span class="text-gray-700 font-medium">{{ c.name }}</span>
+                    {% if c.city_1 %}
+                    <span class="text-xs text-gray-400">{{ c.city_1 }}{% if c.city_2 %}/{{ c.city_2 }}{% endif %}</span>
+                    {% endif %}
+                </label>
                 {% endfor %}
-            </select>
+                {% if not contracts %}
+                <span class="text-xs text-gray-400">Brak kontraktów — wyślij do wszystkich pracowników</span>
+                {% endif %}
+            </div>
+            <div class="text-xs text-gray-400 mt-2"
+                 x-text="selectedContracts.length === 0 ? 'Wyślij do: wszyscy aktywni pracownicy' : 'Wyślij do pracowników z ' + selectedContracts.length + ' wybranych kontrakt(ów)'">
+            </div>
+
+            <!-- Podgląd nazwy kampanii -->
+            <div class="mt-3 text-xs text-gray-500 italic" x-text="
+                'Nazwa kampanii: ' +
+                (selectedContracts.length === 0
+                    ? '{{ month_names[default_month] }} ' + year + ' — wszyscy pracownicy'
+                    : '{{ month_names[default_month] }} ' + year + ' — ' + selectedContracts.length + ' kontrakt(ów)')
+            "></div>
+
+            <!-- Formularz submit -->
+            <form method="post" :action="'/admin/{{ tenant.id }}/campaigns/create'" class="mt-4"
+                  @submit.prevent="
+                    const form = $el;
+                    selectedContracts.forEach(id => {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'contract_ids';
+                        input.value = id;
+                        form.appendChild(input);
+                    });
+                    form.submit();
+                  ">
+                <input type="hidden" name="year" :value="year">
+                <input type="hidden" name="month" :value="month">
+                <button type="submit"
+                        class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
+                    Utwórz kampanię
+                </button>
+            </form>
         </div>
-        <button type="submit"
-                class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">
-            Utwórz
-        </button>
-    </form>
+    </div>
 </div>
 
 <!-- Lista kampanii -->
 <div class="space-y-4">
     {% for camp in campaigns %}
+    {% set camp_contracts = campaign_contracts.get(camp.id, []) %}
     <div class="bg-white border border-gray-200 rounded-xl p-5"
-         x-data="{sending: false, result: null, showContracts: false, showLogs: false, selectedContracts: []}">
+         x-data="{sending: false, result: null, showLogs: false}">
+
         <div class="flex items-center justify-between">
             <div>
                 <span class="font-semibold text-gray-800">
-                    {{ month_names.get(camp.month, camp.month) }} {{ camp.year }}
+                    {{ camp.name or (month_names.get(camp.month, camp.month) ~ " " ~ camp.year) }}
                 </span>
                 <span class="ml-3 text-xs px-2 py-0.5 rounded-full
                     {% if camp.status.value == 'pending' %}bg-yellow-100 text-yellow-700
@@ -52,24 +135,27 @@
                     {% else %}bg-gray-100 text-gray-500{% endif %}">
                     {{ camp.status.value }}
                 </span>
+                {% if camp_contracts %}
+                <div class="mt-1 flex flex-wrap gap-1">
+                    {% for c in camp_contracts %}
+                    <span class="text-xs bg-blue-50 text-blue-600 border border-blue-200 px-2 py-0.5 rounded-full">{{ c.name }}</span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="mt-1 text-xs text-gray-400">Wszyscy pracownicy</div>
+                {% endif %}
             </div>
-            <div class="flex gap-3 items-center">
+            <div class="flex gap-3 items-center flex-shrink-0 ml-4">
                 <form method="post" action="/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/delete"
-                      onsubmit="return confirm('Usunąć kampanię {{ month_names.get(camp.month) }} {{ camp.year }}?')">
+                      onsubmit="return confirm('Usunąć kampanię {{ camp.name or camp.month }}?')">
                     <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
                 </form>
-                <button @click="showContracts = !showContracts"
-                        class="text-gray-500 hover:text-gray-700 text-xs border border-gray-300 rounded-lg px-3 py-1.5">
-                    Wybierz kontrakty
-                </button>
                 <button
                     @click="sending = true; result = null;
-                            const body = new URLSearchParams();
-                            selectedContracts.forEach(id => body.append('contract_ids', id));
                             fetch('/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/send', {
                                 method: 'POST',
                                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                                body: body.toString()
+                                body: ''
                             })
                             .then(r => r.json())
                             .then(d => { result = d; sending = false; })"
@@ -81,32 +167,11 @@
             </div>
         </div>
 
-        <!-- Wybór kontraktów -->
-        <div x-show="showContracts" x-cloak class="mt-3 border border-gray-200 rounded-lg p-3 bg-gray-50">
-            <p class="text-xs text-gray-500 mb-2">Wybierz kontrakty (puste = wszyscy pracownicy):</p>
-            <div class="flex flex-wrap gap-2">
-                {% for contract in contracts %}
-                <label class="flex items-center gap-1 text-sm cursor-pointer">
-                    <input type="checkbox" :value="'{{ contract.id }}'"
-                           @change="if ($event.target.checked) selectedContracts.push('{{ contract.id }}');
-                                    else selectedContracts = selectedContracts.filter(id => id !== '{{ contract.id }}')"
-                           class="rounded border-gray-300 text-blue-600">
-                    <span class="text-gray-700">{{ contract.name }}</span>
-                </label>
-                {% endfor %}
-                {% if not contracts %}
-                <span class="text-xs text-gray-400">Brak kontraktów</span>
-                {% endif %}
-            </div>
-            <p class="text-xs text-gray-400 mt-2"
-               x-text="selectedContracts.length === 0 ? 'Wyślij do: wszyscy aktywni pracownicy' : 'Wyślij do: ' + selectedContracts.length + ' wybranych kontrakt(ów)'">
-            </p>
-        </div>
-
         <div x-show="result" class="mt-3 text-sm">
             <span class="text-green-600 font-medium" x-text="'Wysłano: ' + (result?.sent ?? 0)"></span>
             <span class="text-red-500 ml-3" x-text="result?.failed ? 'Błędy: ' + result.failed : ''"></span>
         </div>
+
         {% if camp.sent_at %}
         <div class="mt-2 text-xs text-gray-400">Wysłano: {{ camp.sent_at.strftime('%d.%m.%Y %H:%M') }}</div>
         {% endif %}
@@ -147,7 +212,7 @@
                             </td>
                             <td class="px-3 py-2 text-center">
                                 {% if s.r1 and s.r1.status == 'sent' %}
-                                <span class="text-green-600" title="{{ s.r1.sent_at.strftime('%d.%m %H:%M') if s.r1.sent_at else '' }}">✓ {{ s.r1.sent_at.strftime('%d.%m') if s.r1.sent_at else 'wysłano' }}</span>
+                                <span class="text-green-600">✓ {{ s.r1.sent_at.strftime('%d.%m') if s.r1.sent_at else 'wysłano' }}</span>
                                 {% elif s.r1 %}
                                 <span class="text-red-500">✗ błąd</span>
                                 {% elif s.filled %}
@@ -158,7 +223,7 @@
                             </td>
                             <td class="px-3 py-2 text-center">
                                 {% if s.r2 and s.r2.status == 'sent' %}
-                                <span class="text-green-600" title="{{ s.r2.sent_at.strftime('%d.%m %H:%M') if s.r2.sent_at else '' }}">✓ {{ s.r2.sent_at.strftime('%d.%m') if s.r2.sent_at else 'wysłano' }}</span>
+                                <span class="text-green-600">✓ {{ s.r2.sent_at.strftime('%d.%m') if s.r2.sent_at else 'wysłano' }}</span>
                                 {% elif s.r2 %}
                                 <span class="text-red-500">✗ błąd</span>
                                 {% elif s.filled %}

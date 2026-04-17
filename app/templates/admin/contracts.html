@@ -6,6 +6,50 @@
     <h1 class="text-xl font-bold text-gray-800">Kontrakty — {{ tenant.name }}</h1>
 </div>
 
+<!-- Import CSV -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-4" x-data="{open: false, importing: false, result: null}">
+    <div class="flex items-center justify-between">
+        <button @click="open = !open" class="text-sm font-medium text-green-600 hover:underline">
+            📥 Importuj kontrakty z CSV
+        </button>
+        <a href="/admin/{{ tenant.id }}/contracts/import/template"
+           class="text-xs text-gray-400 hover:text-blue-500">
+            ⬇ Pobierz szablon CSV
+        </a>
+    </div>
+    <div x-show="open" x-cloak class="mt-4 space-y-3">
+        <div class="text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+            <strong>Format pliku:</strong> CSV z kolumnami:
+            <code class="bg-white px-1 rounded border">nazwa</code>,
+            <code class="bg-white px-1 rounded border">miasto_1</code>,
+            <code class="bg-white px-1 rounded border">miasto_2</code> (opcjonalnie).
+        </div>
+        <div class="flex items-center gap-3">
+            <input type="file" id="contractCsvFile" accept=".csv"
+                   class="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+            <button @click="
+                importing = true; result = null;
+                const f = document.getElementById('contractCsvFile').files[0];
+                if (!f) { importing = false; return; }
+                const fd = new FormData();
+                fd.append('file', f);
+                fetch('/admin/{{ tenant.id }}/contracts/import', {method: 'POST', body: fd})
+                    .then(r => r.json())
+                    .then(d => { result = d; importing = false; if(d.imported > 0) setTimeout(() => location.reload(), 1500); })
+                    .catch(() => { importing = false; })
+            "
+            :disabled="importing"
+            class="bg-green-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-700 transition disabled:opacity-50">
+                <span x-text="importing ? 'Importuję...' : 'Importuj'"></span>
+            </button>
+        </div>
+        <div x-show="result" class="text-sm rounded-lg px-3 py-2"
+             :class="result?.imported > 0 ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-500'">
+            <span x-text="result ? `✅ Dodano: ${result.imported} | Pominięto: ${result.skipped}` : ''"></span>
+        </div>
+    </div>
+</div>
+
 <!-- Formularz dodawania -->
 <div class="bg-white border border-gray-200 rounded-xl p-5 mb-8" x-data="{open: false}">
     <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">
