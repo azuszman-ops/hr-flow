@@ -124,10 +124,19 @@
                 <td class="px-4 py-3" x-data="{open: false}">
                     <div class="flex flex-wrap gap-1 items-center">
                         {% for link in emp.contract_links %}
-                        <span class="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2 py-0.5">{{ link.contract.name }}</span>
+                        <form method="post"
+                              action="/admin/{{ tenant.id }}/employees/{{ emp.id }}/remove_contract/{{ link.contract_id }}"
+                              onsubmit="return confirm('Odpiąć {{ link.contract.name }}?')"
+                              class="inline">
+                            <button type="submit"
+                                    class="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2 py-0.5 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition"
+                                    title="Kliknij aby odpiąć">
+                                {{ link.contract.name }} ✕
+                            </button>
+                        </form>
                         {% endfor %}
                         {% if contracts %}
-                        <button @click="open = !open" class="text-xs text-blue-400 hover:text-blue-600 leading-none">+</button>
+                        <button @click="open = !open" class="text-xs text-blue-400 hover:text-blue-600 leading-none" title="Dodaj kontrakt">+</button>
                         {% endif %}
                     </div>
                     <form x-show="open" x-cloak method="post"

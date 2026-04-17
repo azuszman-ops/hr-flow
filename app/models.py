@@ -217,6 +217,21 @@ class MessageLog(Base):
 
 
 # ---------------------------------------------------------------------------
+# QueuedSend — wiadomości do wysłania gdy limit dobowy zostanie odnowiony
+# ---------------------------------------------------------------------------
+class QueuedSend(Base):
+    __tablename__ = "queued_sends"
+
+    id = Column(Integer, primary_key=True)
+    campaign_id = Column(Integer, ForeignKey("message_campaigns.id"), nullable=False)
+    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    campaign = relationship("MessageCampaign")
+    employee = relationship("Employee")
+
+
+# ---------------------------------------------------------------------------
 # TenantSettings — ustawienia tenanta (szablony wiadomości, przypomnienia)
 # ---------------------------------------------------------------------------
 DEFAULT_INITIAL_MESSAGE = (

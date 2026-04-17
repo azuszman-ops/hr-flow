@@ -24,6 +24,9 @@ def get_twilio():
     return _twilio
 
 
+DAILY_LIMIT = int(os.getenv("WHATSAPP_DAILY_LIMIT", "250"))
+
+
 def build_schedule_link(token: str, year: int = None, month: int = None) -> str:
     base = os.getenv("BASE_URL", "http://localhost:8000")
     url = f"{base}/schedule/{token}"

@@ -13,12 +13,12 @@ from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
 from app.models import (
     MessageCampaign, MessageLog, Employee, ScheduleSubmission,
-    TenantSettings, MessageChannel, CampaignStatus,
+    QueuedSend, TenantSettings, MessageChannel, CampaignStatus,
     DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
     send_whatsapp, MONTH_NAMES_PL, build_schedule_link,
-    TEMPLATE_REMINDER_1, TEMPLATE_REMINDER_2,
+    TEMPLATE_INITIAL, TEMPLATE_REMINDER_1, TEMPLATE_REMINDER_2, DAILY_LIMIT,
 )
 
 logger = logging.getLogger(__name__)
@@ -186,6 +186,73 @@ async def send_follow_up_reminders():
     logger.info("[Scheduler] Follow-up reminder job completed")
 
 
+async def send_queued_messages():
+    """
+    Wysyła zakolejkowane wiadomości początkowe (uruchamiane o 00:05 UTC po odnowieniu limitu).
+    Pomija pracowników, którzy już wypełnili grafik.
+    """
+    logger.info("[Scheduler] Starting queued messages job")
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy.orm import selectinload as sil
+        queued = (await db.execute(
+            select(QueuedSend)
+            .options(sil(QueuedSend.campaign), sil(QueuedSend.employee))
+            .order_by(QueuedSend.created_at)
+        )).scalars().all()
+
+        if not queued:
+            logger.info("[Scheduler] No queued messages")
+            return
+
+        # Grupuj po kampanii, wysyłaj do limitu łącznie
+        sent_today = 0
+        for item in queued:
+            if sent_today >= DAILY_LIMIT:
+                break
+            campaign = item.campaign
+            emp = item.employee
+            if not emp or not emp.is_active or not emp.phone_whatsapp:
+                await db.delete(item)
+                continue
+            # Sprawdź czy już wypełnił grafik
+            submission = (await db.execute(
+                select(ScheduleSubmission).where(
+                    ScheduleSubmission.employee_id == emp.id,
+                    ScheduleSubmission.year == campaign.year,
+                    ScheduleSubmission.month == campaign.month,
+                )
+            )).scalar_one_or_none()
+            if submission:
+                await db.delete(item)
+                continue
+
+            month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
+            result = await send_whatsapp(
+                emp.phone_whatsapp,
+                TEMPLATE_INITIAL,
+                {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token, campaign.year, campaign.month)},
+            )
+            db.add(MessageLog(
+                campaign_id=campaign.id,
+                employee_id=emp.id,
+                channel=MessageChannel.whatsapp,
+                phone_or_email=emp.phone_whatsapp,
+                status=result["status"],
+                external_id=result.get("external_id"),
+                error_message=result.get("error"),
+            ))
+            await db.delete(item)
+            if result["status"] == "sent":
+                sent_today += 1
+            logger.info(
+                "[Scheduler] Queued send to %s %s (campaign %d) — status: %s",
+                emp.first_name, emp.last_name, campaign.id, result["status"]
+            )
+
+        await db.commit()
+    logger.info("[Scheduler] Queued messages job completed — sent %d", sent_today)
+
+
 def start_scheduler():
     """Rejestruje zadania i startuje scheduler."""
     scheduler.add_job(
@@ -194,8 +261,14 @@ def start_scheduler():
         id="follow_up_reminders",
         replace_existing=True,
     )
+    scheduler.add_job(
+        send_queued_messages,
+        trigger=CronTrigger(hour=0, minute=5, timezone="UTC"),
+        id="send_queued_messages",
+        replace_existing=True,
+    )
     scheduler.start()
-    logger.info("[Scheduler] Started — follow-up reminders scheduled at 09:00 UTC daily")
+    logger.info("[Scheduler] Started — reminders at 09:00 UTC, queued sends at 00:05 UTC")
 
 
 def stop_scheduler():

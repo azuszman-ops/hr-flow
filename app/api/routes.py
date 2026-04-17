@@ -60,10 +60,11 @@ from app.models import (
     Tenant, Contract, Employee, ContractEmployee,
     ScheduleSubmission, AvailabilityDay, AvailabilityStatus,
     MessageTemplate, MessageCampaign, CampaignContract, MessageLog, MessageChannel, CampaignStatus,
-    TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
+    QueuedSend, TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
-    send_whatsapp, MONTH_NAMES_PL, build_schedule_link, validate_phone, TEMPLATE_INITIAL,
+    send_whatsapp, MONTH_NAMES_PL, build_schedule_link, validate_phone,
+    TEMPLATE_INITIAL, DAILY_LIMIT,
 )
 
 router = APIRouter()
@@ -483,6 +484,7 @@ async def assign_contract_to_employee(
     tenant_id: int,
     employee_id: int,
     contract_id: int = Form(...),
+    redirect: str = Form(""),
     db: AsyncSession = Depends(get_db),
     _: Tenant = Depends(get_authed_tenant),
 ):
@@ -498,6 +500,32 @@ async def assign_contract_to_employee(
     if not existing:
         db.add(ContractEmployee(employee_id=employee_id, contract_id=contract_id))
         await db.commit()
+    if redirect == "edit":
+        return RedirectResponse(f"/admin/{tenant_id}/employees/{employee_id}/edit", status_code=303)
+    return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
+
+
+@router.post("/admin/{tenant_id}/employees/{employee_id}/remove_contract/{contract_id}")
+async def remove_contract_from_employee(
+    tenant_id: int,
+    employee_id: int,
+    contract_id: int,
+    redirect: str = Form(""),
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
+):
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+    await db.execute(
+        delete(ContractEmployee).where(
+            ContractEmployee.employee_id == employee_id,
+            ContractEmployee.contract_id == contract_id,
+        )
+    )
+    await db.commit()
+    if redirect == "edit":
+        return RedirectResponse(f"/admin/{tenant_id}/employees/{employee_id}/edit", status_code=303)
     return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
 
 
@@ -505,11 +533,25 @@ async def assign_contract_to_employee(
 async def edit_employee_form(
     request: Request, tenant_id: int, employee_id: int, db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)
 ):
-    emp = await db.get(Employee, employee_id)
-    if not emp or emp.tenant_id != tenant_id:
+    emp = (await db.execute(
+        select(Employee)
+        .where(Employee.id == employee_id, Employee.tenant_id == tenant_id)
+        .options(selectinload(Employee.contract_links).selectinload(ContractEmployee.contract))
+    )).scalar_one_or_none()
+    if not emp:
         raise HTTPException(404)
+
+    contracts = (await db.execute(
+        select(Contract)
+        .where(Contract.tenant_id == tenant_id, Contract.is_active == True)
+        .order_by(Contract.name)
+    )).scalars().all()
+    assigned_ids = {link.contract_id for link in emp.contract_links}
+    available_contracts = [c for c in contracts if c.id not in assigned_ids]
+
     return templates.TemplateResponse("admin/employee_edit.html", {
-        "request": request, "tenant": tenant, "employee": emp
+        "request": request, "tenant": tenant, "employee": emp,
+        "available_contracts": available_contracts,
     })
 
 
@@ -620,12 +662,21 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
         sent_str = camp.sent_at.strftime("%d.%m.%Y") if camp.sent_at else "niewysłana"
         month_campaigns[key].append({"label": label, "sent": sent_str})
 
+    # Liczba zakolejkowanych wiadomości per kampania
+    queued_rows = (await db.execute(
+        select(QueuedSend.campaign_id, func.count(QueuedSend.id).label("cnt"))
+        .where(QueuedSend.campaign_id.in_([c.id for c in campaigns]))
+        .group_by(QueuedSend.campaign_id)
+    )).all() if campaigns else []
+    campaign_queued = {row.campaign_id: row.cnt for row in queued_rows}
+
     return templates.TemplateResponse("admin/campaigns.html", {
         "request": request, "tenant": tenant, "campaigns": campaigns,
         "contracts": contracts, "campaign_contracts": campaign_contracts,
         "campaign_stats": campaign_stats,
         "now": now, "default_year": default_year, "default_month": default_month,
         "month_names": MONTH_NAMES_PL, "month_campaigns": dict(month_campaigns),
+        "campaign_queued": campaign_queued, "daily_limit": DAILY_LIMIT,
     })
 
 
@@ -669,11 +720,11 @@ async def send_campaign(
     request: Request,
     tenant_id: int,
     campaign_id: int,
-    confirm: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     _: Tenant = Depends(get_authed_tenant),
 ):
-    """Wysyła wiadomości WhatsApp do pracowników z kontraktów przypisanych do kampanii."""
+    """Wysyła wiadomości WhatsApp. Jeśli limit dobowy przekroczony — kolejkuje na jutro."""
+    from datetime import timezone as tz
     campaign = await db.get(MessageCampaign, campaign_id)
     if not campaign or campaign.tenant_id != tenant_id:
         raise HTTPException(404)
@@ -696,45 +747,59 @@ async def send_campaign(
             .distinct()
         )).scalars().all()
     else:
-        # Brak przypisanych kontraktów → wszyscy aktywni
         employees = (await db.execute(
             select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True)
         )).scalars().all()
 
-    # Deduplikacja — pracownik może być w wielu kontraktach
+    # Deduplikacja
     seen_ids: set = set()
     unique_employees = []
     for emp in employees:
         if emp.id not in seen_ids:
             seen_ids.add(emp.id)
             unique_employees.append(emp)
-    employees = unique_employees
 
-    # Walidacja numerów telefonów
-    valid_employees = [e for e in employees if validate_phone(e.phone_whatsapp)]
-    invalid_count = len([e for e in employees if e.phone_whatsapp and not validate_phone(e.phone_whatsapp)])
-    no_phone_count = len([e for e in employees if not e.phone_whatsapp])
+    # Walidacja numerów
+    valid_employees = [e for e in unique_employees if validate_phone(e.phone_whatsapp)]
+    invalid_count = len([e for e in unique_employees if e.phone_whatsapp and not validate_phone(e.phone_whatsapp)])
+    no_phone_count = len([e for e in unique_employees if not e.phone_whatsapp])
 
-    # Ostrzeżenie: >250 odbiorców (limit dzienny WhatsApp)
-    if len(valid_employees) > 250 and not confirm:
-        return JSONResponse({
-            "confirm_required": True,
-            "count": len(valid_employees),
-            "invalid": invalid_count,
-            "no_phone": no_phone_count,
-        })
+    # Pomiń już zakolejkowanych (żeby uniknąć duplikatów przy ponownym kliknięciu)
+    already_queued_ids = set((await db.execute(
+        select(QueuedSend.employee_id).where(QueuedSend.campaign_id == campaign_id)
+    )).scalars().all())
+    valid_employees = [e for e in valid_employees if e.id not in already_queued_ids]
+
+    # Sprawdź ile wiadomości wysłano dziś dla tego tenanta
+    now_utc = datetime.now(tz.utc)
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    today_sent_count = (await db.execute(
+        select(func.count(MessageLog.id))
+        .join(MessageCampaign, MessageLog.campaign_id == MessageCampaign.id)
+        .where(
+            MessageCampaign.tenant_id == tenant_id,
+            MessageLog.status == "sent",
+            MessageLog.is_reminder == False,
+            MessageLog.is_reminder_2 == False,
+            MessageLog.sent_at >= today_start,
+        )
+    )).scalar() or 0
+
+    capacity_today = max(0, DAILY_LIMIT - today_sent_count)
+    send_now = valid_employees[:capacity_today]
+    send_later = valid_employees[capacity_today:]
 
     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
-
     sent, failed = 0, 0
-    for emp in valid_employees:
+
+    for emp in send_now:
         link = build_schedule_link(emp.token, campaign.year, campaign.month)
         result = await send_whatsapp(
             emp.phone_whatsapp,
             TEMPLATE_INITIAL,
             {"1": emp.first_name, "2": month_name, "3": link},
         )
-        log = MessageLog(
+        db.add(MessageLog(
             campaign_id=campaign_id,
             employee_id=emp.id,
             channel=MessageChannel.whatsapp,
@@ -742,18 +807,35 @@ async def send_campaign(
             status=result["status"],
             external_id=result.get("external_id"),
             error_message=result.get("error"),
-        )
-        db.add(log)
+        ))
         if result["status"] == "sent":
             sent += 1
         else:
             failed += 1
 
+    # Kolejkuj resztę na jutro (limit zostanie odnowiony o 00:00 UTC)
+    for emp in send_later:
+        db.add(QueuedSend(campaign_id=campaign_id, employee_id=emp.id))
+
     campaign.status = CampaignStatus.sent
     campaign.sent_at = datetime.now()
     await db.commit()
 
-    return JSONResponse({"sent": sent, "failed": failed, "invalid": invalid_count, "no_phone": no_phone_count})
+    # Czas odnowienia: jutro o 00:05 UTC
+    from datetime import date as date_cls
+    import datetime as dt_module
+    tomorrow = (now_utc + dt_module.timedelta(days=1)).strftime("%d.%m")
+
+    return JSONResponse({
+        "sent": sent,
+        "failed": failed,
+        "queued": len(send_later),
+        "queue_date": tomorrow,
+        "invalid": invalid_count,
+        "no_phone": no_phone_count,
+        "limit": DAILY_LIMIT,
+        "today_sent": today_sent_count,
+    })
 
 
 @router.post("/admin/{tenant_id}/campaigns/{campaign_id}/delete")
@@ -899,8 +981,12 @@ async def employee_schedule_pdf(
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_authed_tenant),
 ):
-    emp = await db.get(Employee, employee_id)
-    if not emp or emp.tenant_id != tenant_id:
+    emp = (await db.execute(
+        select(Employee)
+        .where(Employee.id == employee_id, Employee.tenant_id == tenant_id)
+        .options(selectinload(Employee.contract_links).selectinload(ContractEmployee.contract))
+    )).scalar_one_or_none()
+    if not emp:
         raise HTTPException(404)
 
     now = datetime.now()
@@ -930,6 +1016,9 @@ async def employee_schedule_pdf(
         for d in submission.days:
             day_map[d.date.isoformat()] = d
 
+    active_contracts = [link.contract for link in emp.contract_links if link.contract.is_active]
+    location_contract = next((c for c in active_contracts if c.city_1), None) or (active_contracts[0] if active_contracts else None)
+
     return templates.TemplateResponse("admin/schedule_pdf.html", {
         "request": request,
         "tenant": tenant,
@@ -942,6 +1031,7 @@ async def employee_schedule_pdf(
         "month": month,
         "month_name": MONTH_NAMES_PL.get(month, ""),
         "now": now,
+        "location_contract": location_contract,
     })
 
 

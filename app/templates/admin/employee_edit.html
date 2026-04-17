@@ -50,6 +50,51 @@
             </div>
         </form>
     </div>
+
+    <!-- Zarządzanie kontraktami -->
+    <div class="bg-white border border-gray-200 rounded-xl p-6 mt-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Kontrakty</h2>
+
+        {% if employee.contract_links %}
+        <div class="flex flex-wrap gap-2 mb-4">
+            {% for link in employee.contract_links %}
+            <form method="post"
+                  action="/admin/{{ tenant.id }}/employees/{{ employee.id }}/remove_contract/{{ link.contract_id }}"
+                  onsubmit="return confirm('Odpiąć kontrakt {{ link.contract.name }}?')"
+                  class="inline">
+                <input type="hidden" name="redirect" value="edit">
+                <button type="submit"
+                        class="text-sm bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-3 py-1 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition">
+                    {{ link.contract.name }}
+                    {% if link.contract.city_1 %}<span class="text-xs opacity-70">— {{ link.contract.city_1 }}{% if link.contract.city_2 %}/{{ link.contract.city_2 }}{% endif %}</span>{% endif %}
+                    ✕
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-sm text-gray-400 mb-4">Brak przypisanych kontraktów.</div>
+        {% endif %}
+
+        {% if available_contracts %}
+        <form method="post" action="/admin/{{ tenant.id }}/employees/{{ employee.id }}/assign_contract"
+              class="flex gap-2">
+            <input type="hidden" name="redirect" value="edit">
+            <select name="contract_id"
+                    class="border border-gray-300 rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                {% for c in available_contracts %}
+                <option value="{{ c.id }}">{{ c.name }}{% if c.city_1 %} — {{ c.city_1 }}{% if c.city_2 %}/{{ c.city_2 }}{% endif %}{% endif %}</option>
+                {% endfor %}
+            </select>
+            <button type="submit"
+                    class="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 transition">
+                Przypisz kontrakt
+            </button>
+        </form>
+        {% else %}
+        <div class="text-sm text-gray-400">Wszystkie kontrakty już przypisane.</div>
+        {% endif %}
+    </div>
 </div>
 
 {% endblock %}

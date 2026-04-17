@@ -83,6 +83,11 @@
         <div class="label">Lokalizacja</div>
         <div class="value">📍 {{ submission.location_choice }}</div>
     </div>
+    {% elif location_contract %}
+    <div class="meta-box">
+        <div class="label">Kontrakt / Lokalizacja</div>
+        <div class="value">{{ location_contract.name }}{% if location_contract.city_1 %}<br><span style="font-size:12px;font-weight:normal;color:#6b7280;">📍 {{ location_contract.city_1 }}{% if location_contract.city_2 %} / {{ location_contract.city_2 }}{% endif %}</span>{% endif %}</div>
+    </div>
     {% endif %}
 </div>
 
