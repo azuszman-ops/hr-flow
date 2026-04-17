@@ -36,7 +36,14 @@
             </div>
 
             <!-- Wybór kontraktów -->
-            <label class="text-xs text-gray-500 block mb-2">Wybierz kontrakty (puste = wszyscy pracownicy):</label>
+            <div class="flex items-center justify-between mb-2">
+                <label class="text-xs text-gray-500">Wybierz kontrakty (puste = wszyscy pracownicy):</label>
+                <label class="flex items-center gap-1.5 text-xs text-blue-600 cursor-pointer hover:underline">
+                    <input type="checkbox" id="selectAllContracts"
+                           onchange="document.querySelectorAll('[name=contract_ids]').forEach(cb => cb.checked = this.checked)">
+                    Zaznacz wszystkie
+                </label>
+            </div>
             <div class="flex flex-wrap gap-2 mb-4">
                 {% for c in contracts %}
                 <label class="flex items-center gap-1.5 text-sm cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 hover:border-blue-300 transition">
