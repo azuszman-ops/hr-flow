@@ -104,8 +104,8 @@
             <tr>
                 <th class="px-4 py-3 text-left">Pracownik</th>
                 <th class="px-4 py-3 text-left">WhatsApp</th>
-                <th class="px-4 py-3 text-left">Viber</th>
                 <th class="px-4 py-3 text-left">Email</th>
+                <th class="px-4 py-3 text-left">Kontrakty</th>
                 <th class="px-4 py-3"></th>
             </tr>
         </thead>
@@ -113,17 +113,45 @@
             {% for emp in employees %}
             <tr class="hover:bg-gray-50"
                 x-show="search === '' || '{{ emp.last_name }} {{ emp.first_name }}'.toLowerCase().includes(search.toLowerCase()) || '{{ emp.first_name }} {{ emp.last_name }}'.toLowerCase().includes(search.toLowerCase())">
-                <td class="px-4 py-3 font-medium text-gray-800">{{ emp.first_name }} {{ emp.last_name }}</td>
-                <td class="px-4 py-3 text-gray-500">{{ emp.phone_whatsapp or "—" }}</td>
-                <td class="px-4 py-3 text-gray-500">{{ emp.phone_viber or "—" }}</td>
-                <td class="px-4 py-3 text-gray-500">{{ emp.email or "—" }}</td>
-                <td class="px-4 py-3 text-right flex justify-end gap-3">
-                    <a href="/admin/{{ tenant.id }}/employees/{{ emp.id }}/edit"
-                       class="text-blue-500 hover:text-blue-700 text-xs">Edytuj</a>
-                    <form method="post" action="/admin/{{ tenant.id }}/employees/{{ emp.id }}/delete"
-                          onsubmit="return confirm('Usunąć {{ emp.first_name }}?')">
-                        <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
+                <td class="px-4 py-3 font-medium text-gray-800">
+                    {{ emp.first_name }} {{ emp.last_name }}
+                    {% if emp.phone_whatsapp and not (emp.phone_whatsapp.startswith('+') and emp.phone_whatsapp[1:].isdigit() and 10 <= emp.phone_whatsapp|length - 1 <= 15) %}
+                    <span class="text-xs text-red-400 ml-1" title="Nieprawidłowy format numeru">⚠</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-gray-500 text-xs">{{ emp.phone_whatsapp or "—" }}</td>
+                <td class="px-4 py-3 text-gray-500 text-xs">{{ emp.email or "—" }}</td>
+                <td class="px-4 py-3" x-data="{open: false}">
+                    <div class="flex flex-wrap gap-1 items-center">
+                        {% for link in emp.contract_links %}
+                        <span class="text-xs bg-blue-50 text-blue-600 border border-blue-200 rounded-full px-2 py-0.5">{{ link.contract.name }}</span>
+                        {% endfor %}
+                        {% if contracts %}
+                        <button @click="open = !open" class="text-xs text-blue-400 hover:text-blue-600 leading-none">+</button>
+                        {% endif %}
+                    </div>
+                    <form x-show="open" x-cloak method="post"
+                          action="/admin/{{ tenant.id }}/employees/{{ emp.id }}/assign_contract"
+                          class="flex gap-1 mt-1">
+                        <select name="contract_id"
+                                class="border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
+                            {% for c in contracts %}
+                            <option value="{{ c.id }}">{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit"
+                                class="bg-blue-600 text-white rounded px-2 py-1 text-xs hover:bg-blue-700">Przypisz</button>
                     </form>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex justify-end gap-3">
+                        <a href="/admin/{{ tenant.id }}/employees/{{ emp.id }}/edit"
+                           class="text-blue-500 hover:text-blue-700 text-xs">Edytuj</a>
+                        <form method="post" action="/admin/{{ tenant.id }}/employees/{{ emp.id }}/delete"
+                              onsubmit="return confirm('Usunąć {{ emp.first_name }}?')">
+                            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
+                        </form>
+                    </div>
                 </td>
             </tr>
             {% endfor %}

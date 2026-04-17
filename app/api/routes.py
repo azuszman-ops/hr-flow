@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -63,7 +63,7 @@ from app.models import (
     TenantSettings, DEFAULT_INITIAL_MESSAGE, DEFAULT_REMINDER_MESSAGE, DEFAULT_REMINDER_2_MESSAGE,
 )
 from app.services.messaging import (
-    send_whatsapp, MONTH_NAMES_PL, build_schedule_link, TEMPLATE_INITIAL,
+    send_whatsapp, MONTH_NAMES_PL, build_schedule_link, validate_phone, TEMPLATE_INITIAL,
 )
 
 router = APIRouter()
@@ -430,6 +430,7 @@ async def admin_employees(request: Request, tenant_id: int, db: AsyncSession = D
             select(Employee)
             .where(Employee.tenant_id == tenant_id)
             .order_by(Employee.last_name, Employee.first_name)
+            .options(selectinload(Employee.contract_links).selectinload(ContractEmployee.contract))
         )
     ).scalars().all()
     contracts = (
@@ -473,6 +474,29 @@ async def delete_employee(tenant_id: int, employee_id: int, db: AsyncSession = D
     emp = await db.get(Employee, employee_id)
     if emp and emp.tenant_id == tenant_id:
         await db.delete(emp)
+        await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
+
+
+@router.post("/admin/{tenant_id}/employees/{employee_id}/assign_contract")
+async def assign_contract_to_employee(
+    tenant_id: int,
+    employee_id: int,
+    contract_id: int = Form(...),
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
+):
+    emp = await db.get(Employee, employee_id)
+    if not emp or emp.tenant_id != tenant_id:
+        raise HTTPException(404)
+    existing = (await db.execute(
+        select(ContractEmployee).where(
+            ContractEmployee.employee_id == employee_id,
+            ContractEmployee.contract_id == contract_id,
+        )
+    )).scalar_one_or_none()
+    if not existing:
+        db.add(ContractEmployee(employee_id=employee_id, contract_id=contract_id))
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/employees", status_code=303)
 
@@ -645,6 +669,7 @@ async def send_campaign(
     request: Request,
     tenant_id: int,
     campaign_id: int,
+    confirm: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     _: Tenant = Depends(get_authed_tenant),
 ):
@@ -685,28 +710,29 @@ async def send_campaign(
             unique_employees.append(emp)
     employees = unique_employees
 
-    # Pobierz ustawienia tenanta (szablon wiadomości)
-    tenant_settings = (
-        await db.execute(
-            select(TenantSettings).where(TenantSettings.tenant_id == tenant_id)
-        )
-    ).scalar_one_or_none()
+    # Walidacja numerów telefonów
+    valid_employees = [e for e in employees if validate_phone(e.phone_whatsapp)]
+    invalid_count = len([e for e in employees if e.phone_whatsapp and not validate_phone(e.phone_whatsapp)])
+    no_phone_count = len([e for e in employees if not e.phone_whatsapp])
+
+    # Ostrzeżenie: >250 odbiorców (limit dzienny WhatsApp)
+    if len(valid_employees) > 250 and not confirm:
+        return JSONResponse({
+            "confirm_required": True,
+            "count": len(valid_employees),
+            "invalid": invalid_count,
+            "no_phone": no_phone_count,
+        })
 
     month_name = MONTH_NAMES_PL.get(campaign.month, str(campaign.month))
-    message_template = (
-        tenant_settings.initial_message
-        if tenant_settings
-        else DEFAULT_INITIAL_MESSAGE
-    )
 
     sent, failed = 0, 0
-    for emp in employees:
-        if not emp.phone_whatsapp:
-            continue
+    for emp in valid_employees:
+        link = build_schedule_link(emp.token, campaign.year, campaign.month)
         result = await send_whatsapp(
             emp.phone_whatsapp,
             TEMPLATE_INITIAL,
-            {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+            {"1": emp.first_name, "2": month_name, "3": link},
         )
         log = MessageLog(
             campaign_id=campaign_id,
@@ -727,7 +753,7 @@ async def send_campaign(
     campaign.sent_at = datetime.now()
     await db.commit()
 
-    return JSONResponse({"sent": sent, "failed": failed})
+    return JSONResponse({"sent": sent, "failed": failed, "invalid": invalid_count, "no_phone": no_phone_count})
 
 
 @router.post("/admin/{tenant_id}/campaigns/{campaign_id}/delete")
@@ -735,6 +761,20 @@ async def delete_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = D
     campaign = await db.get(MessageCampaign, campaign_id)
     if campaign and campaign.tenant_id == tenant_id:
         await db.delete(campaign)
+        await db.commit()
+    return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
+
+
+@router.post("/admin/{tenant_id}/campaigns/{campaign_id}/pause")
+async def toggle_pause_campaign(
+    tenant_id: int,
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+    _: Tenant = Depends(get_authed_tenant),
+):
+    campaign = await db.get(MessageCampaign, campaign_id)
+    if campaign and campaign.tenant_id == tenant_id:
+        campaign.is_paused = not (campaign.is_paused or False)
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
 
@@ -910,17 +950,18 @@ async def employee_schedule_pdf(
 # ============================================================
 
 @router.get("/schedule/{token}", response_class=HTMLResponse)
-async def employee_schedule(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def employee_schedule(request: Request, token: str, year: int = None, month: int = None, db: AsyncSession = Depends(get_db)):
     emp = (await db.execute(select(Employee).where(Employee.token == token))).scalar_one_or_none()
     if not emp or not emp.is_active:
         raise HTTPException(404, "Link jest nieprawidłowy lub wygasł.")
 
     now = datetime.now()
-    # Grafik na następny miesiąc
-    if now.month == 12:
-        year, month = now.year + 1, 1
-    else:
-        year, month = now.year, now.month + 1
+    if year is None or month is None:
+        # Domyślnie grafik na następny miesiąc od daty serwera
+        if now.month == 12:
+            year, month = now.year + 1, 1
+        else:
+            year, month = now.year, now.month + 1
 
     # Czy już wypełniony?
     existing = (await db.execute(
@@ -970,16 +1011,17 @@ async def employee_schedule(request: Request, token: str, db: AsyncSession = Dep
 
 
 @router.post("/schedule/{token}")
-async def submit_schedule(request: Request, token: str, db: AsyncSession = Depends(get_db)):
+async def submit_schedule(request: Request, token: str, year: int = None, month: int = None, db: AsyncSession = Depends(get_db)):
     emp = (await db.execute(select(Employee).where(Employee.token == token))).scalar_one_or_none()
     if not emp or not emp.is_active:
         raise HTTPException(404)
 
     now = datetime.now()
-    if now.month == 12:
-        year, month = now.year + 1, 1
-    else:
-        year, month = now.year, now.month + 1
+    if year is None or month is None:
+        if now.month == 12:
+            year, month = now.year + 1, 1
+        else:
+            year, month = now.year, now.month + 1
 
     # Jeśli grafik już wysłany — odrzuć (blokada edycji)
     existing = (await db.execute(

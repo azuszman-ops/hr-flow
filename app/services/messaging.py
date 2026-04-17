@@ -3,6 +3,7 @@ Serwis wysyłki wiadomości: WhatsApp (Twilio) + Viber (placeholder) + Email (pl
 """
 import json
 import os
+import re
 from twilio.rest import Client as TwilioClient
 
 TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
@@ -23,9 +24,19 @@ def get_twilio():
     return _twilio
 
 
-def build_schedule_link(token: str) -> str:
+def build_schedule_link(token: str, year: int = None, month: int = None) -> str:
     base = os.getenv("BASE_URL", "http://localhost:8000")
-    return f"{base}/schedule/{token}"
+    url = f"{base}/schedule/{token}"
+    if year and month:
+        url += f"?year={year}&month={month}"
+    return url
+
+
+def validate_phone(phone: str) -> bool:
+    """Validates WhatsApp phone: must start with + and have 10–15 digits."""
+    if not phone:
+        return False
+    return bool(re.match(r'^\+\d{10,15}$', phone.strip()))
 
 
 async def send_whatsapp(to_phone: str, template_sid: str, variables: dict) -> dict:

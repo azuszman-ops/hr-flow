@@ -128,7 +128,7 @@
             <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-gray-200 inline-block"></span> Niedostępny</span>
         </div>
 
-        <form method="post" action="/schedule/{{ employee.token }}">
+        <form method="post" action="/schedule/{{ employee.token }}?year={{ year }}&month={{ month }}">
             <!-- Kalendarz dni -->
             <div class="space-y-2">
                 {% for day in days %}

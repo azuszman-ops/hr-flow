@@ -78,6 +78,12 @@
         <div class="value">{{ submission.submitted_at.strftime('%d.%m.%Y') }}</div>
     </div>
     {% endif %}
+    {% if submission and submission.location_choice %}
+    <div class="meta-box">
+        <div class="label">Lokalizacja</div>
+        <div class="value">📍 {{ submission.location_choice }}</div>
+    </div>
+    {% endif %}
 </div>
 
 {% if submission %}

@@ -39,10 +39,13 @@ async def send_follow_up_reminders():
     now = datetime.utcnow()
 
     async with AsyncSessionLocal() as db:
-        # Pobierz wszystkie kampanie ze statusem 'sent'
+        # Pobierz wszystkie aktywne (nie zatrzymane) kampanie ze statusem 'sent'
         active_campaigns = (
             await db.execute(
-                select(MessageCampaign).where(MessageCampaign.status == CampaignStatus.sent)
+                select(MessageCampaign).where(
+                    MessageCampaign.status == CampaignStatus.sent,
+                    MessageCampaign.is_paused == False,
+                )
             )
         ).scalars().all()
 
@@ -122,7 +125,7 @@ async def send_follow_up_reminders():
                     result = await send_whatsapp(
                         emp.phone_whatsapp,
                         TEMPLATE_REMINDER_1,
-                        {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+                        {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token, campaign.year, campaign.month)},
                     )
                     reminder_log = MessageLog(
                         campaign_id=campaign.id,
@@ -160,7 +163,7 @@ async def send_follow_up_reminders():
                         result = await send_whatsapp(
                             emp.phone_whatsapp,
                             TEMPLATE_REMINDER_2,
-                            {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token)},
+                            {"1": emp.first_name, "2": month_name, "3": build_schedule_link(emp.token, campaign.year, campaign.month)},
                         )
                         reminder_2_log = MessageLog(
                             campaign_id=campaign.id,

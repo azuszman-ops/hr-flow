@@ -58,3 +58,6 @@ async def init_db():
         await conn.execute(text(
             "ALTER TABLE schedule_submissions ADD COLUMN IF NOT EXISTS location_choice VARCHAR(200)"
         ))
+        await conn.execute(text(
+            "ALTER TABLE message_campaigns ADD COLUMN IF NOT EXISTS is_paused BOOLEAN DEFAULT FALSE"
+        ))

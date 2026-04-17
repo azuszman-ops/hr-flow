@@ -168,6 +168,7 @@ class MessageCampaign(Base):
     month = Column(Integer, nullable=False)
     name = Column(String(300), nullable=True)  # np. "Maj 2026 — Panatoni Wrocław, Magazyn X"
     status = Column(SAEnum(CampaignStatus), default=CampaignStatus.pending)
+    is_paused = Column(Boolean, default=False)
     confirmed_by = Column(String(200), nullable=True)
     confirmed_at = Column(DateTime(timezone=True), nullable=True)
     sent_at = Column(DateTime(timezone=True), nullable=True)

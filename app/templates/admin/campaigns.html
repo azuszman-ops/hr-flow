@@ -110,6 +110,14 @@ function checkCampaignConflict(form) {
                 {% endif %}
             </div>
             <div class="flex gap-3 items-center flex-shrink-0 ml-4">
+                <!-- Pause/Resume automatycznych przypomnień -->
+                <form method="post" action="/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/pause">
+                    <button type="submit"
+                            class="{% if camp.is_paused %}text-green-600 hover:text-green-800{% else %}text-gray-400 hover:text-gray-600{% endif %} text-xs"
+                            title="{% if camp.is_paused %}Wznów automatyczne przypomnienia{% else %}Zatrzymaj automatyczne przypomnienia{% endif %}">
+                        {% if camp.is_paused %}▶ Wznów{% else %}⏸ Zatrzymaj{% endif %}
+                    </button>
+                </form>
                 <form method="post" action="/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/delete"
                       onsubmit="return confirm('Usunąć kampanię {{ camp.name or camp.month }}?')">
                     <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Usuń</button>
@@ -122,7 +130,23 @@ function checkCampaignConflict(form) {
                                 body: ''
                             })
                             .then(r => r.json())
-                            .then(d => { result = d; sending = false; })"
+                            .then(d => {
+                                if (d.confirm_required) {
+                                    sending = false;
+                                    if (confirm('Ta kampania wysyła do ' + d.count + ' pracowników.\nLimit dzienny WhatsApp to 250 wiadomości.\n\nCzy na pewno wysłać?')) {
+                                        sending = true;
+                                        fetch('/admin/{{ tenant.id }}/campaigns/{{ camp.id }}/send?confirm=1', {
+                                            method: 'POST',
+                                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                                            body: ''
+                                        })
+                                        .then(r => r.json())
+                                        .then(d2 => { result = d2; sending = false; });
+                                    }
+                                } else {
+                                    result = d; sending = false;
+                                }
+                            })"
                     :disabled="sending"
                     class="{% if camp.status.value == 'sent' %}bg-gray-500 hover:bg-gray-600{% else %}bg-green-600 hover:bg-green-700{% endif %} text-white rounded-lg px-4 py-1.5 text-sm font-medium transition disabled:opacity-50">
                     <span x-show="!sending">{% if camp.status.value == 'sent' %}Wyślij ponownie{% else %}Wyślij wiadomości{% endif %}</span>
@@ -134,6 +158,8 @@ function checkCampaignConflict(form) {
         <div x-show="result" class="mt-3 text-sm">
             <span class="text-green-600 font-medium" x-text="'Wysłano: ' + (result?.sent ?? 0)"></span>
             <span class="text-red-500 ml-3" x-text="result?.failed ? 'Błędy: ' + result.failed : ''"></span>
+            <span class="text-gray-400 ml-3" x-text="result?.invalid ? 'Pominięto (błędny nr): ' + result.invalid : ''"></span>
+            <span class="text-gray-400 ml-3" x-text="result?.no_phone ? 'Brak numeru: ' + result.no_phone : ''"></span>
         </div>
 
         {% if camp.sent_at %}
