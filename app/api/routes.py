@@ -139,19 +139,16 @@ async def admin_calendar(
     tenant_id: int,
     year: int = None,
     month: int = None,
-    contract_id: int = None,
     db: AsyncSession = Depends(get_db),
     tenant: Tenant = Depends(get_authed_tenant),
 ):
     now = datetime.now()
     if year is None or month is None:
-        # Domyślnie: następny miesiąc (zbieramy grafik na przyszły miesiąc)
         if now.month == 12:
             year, month = now.year + 1, 1
         else:
             year, month = now.year, now.month + 1
 
-    # Prev / next month
     if month == 1:
         prev_year, prev_month = year - 1, 12
     else:
@@ -165,29 +162,24 @@ async def admin_calendar(
         select(Contract).where(Contract.tenant_id == tenant_id, Contract.is_active == True)
     )).scalars().all()
 
-    # Pobierz pracowników (z filtrem po kontrakcie)
-    if contract_id:
-        employees = (await db.execute(
-            select(Employee)
-            .join(ContractEmployee, ContractEmployee.employee_id == Employee.id)
-            .where(
-                Employee.tenant_id == tenant_id,
-                Employee.is_active == True,
-                ContractEmployee.contract_id == contract_id,
-            )
-            .order_by(Employee.last_name, Employee.first_name)
-            .distinct()
-        )).scalars().all()
-    else:
-        employees = (await db.execute(
-            select(Employee)
-            .where(Employee.tenant_id == tenant_id, Employee.is_active == True)
-            .order_by(Employee.last_name, Employee.first_name)
-        )).scalars().all()
+    # Zawsze ładuj wszystkich pracowników — filtrowanie po kontrakcie po stronie klienta
+    employees = (await db.execute(
+        select(Employee)
+        .where(Employee.tenant_id == tenant_id, Employee.is_active == True)
+        .order_by(Employee.last_name, Employee.first_name)
+    )).scalars().all()
 
     employee_ids = [e.id for e in employees]
 
-    # Pobierz submissiony z dniami
+    # Przynależności pracowników do kontraktów: emp_id -> [contract_id, ...]
+    from collections import defaultdict
+    contract_links = (await db.execute(
+        select(ContractEmployee).where(ContractEmployee.employee_id.in_(employee_ids))
+    )).scalars().all()
+    emp_contracts: dict = defaultdict(list)
+    for link in contract_links:
+        emp_contracts[link.employee_id].append(link.contract_id)
+
     submissions = (await db.execute(
         select(ScheduleSubmission)
         .where(
@@ -200,7 +192,6 @@ async def admin_calendar(
 
     submissions_by_emp = {s.employee_id: s for s in submissions}
 
-    # Zbuduj mapę: emp_id -> {iso_date: status}
     day_statuses: dict[int, dict[str, str]] = {}
     day_hours: dict[int, dict[str, str]] = {}
     for sub in submissions:
@@ -221,8 +212,8 @@ async def admin_calendar(
         "request": request,
         "tenant": tenant,
         "contracts": contracts,
-        "selected_contract_id": contract_id,
         "employees": employees,
+        "emp_contracts": emp_contracts,
         "submissions_by_emp": submissions_by_emp,
         "day_statuses": day_statuses,
         "day_hours": day_hours,
@@ -236,6 +227,7 @@ async def admin_calendar(
         "next_year": next_year,
         "next_month": next_month,
         "submitted_count": len(submissions),
+        "total_employees": len(employees),
     })
 
 

@@ -2,32 +2,47 @@
 {% block title %}Kalendarz — {{ tenant.name }}{% endblock %}
 {% block content %}
 
-<div class="flex flex-wrap items-start justify-between gap-4 mb-6">
+<div x-data="{
+    selectedContract: '',
+    nameSearch: '',
+    availFilter: 'all'
+}">
+
+<!-- Header + filtry -->
+<div class="flex flex-wrap items-start justify-between gap-3 mb-4">
     <div>
         <h1 class="text-xl font-bold text-gray-800">Kalendarz zarządczy</h1>
         <p class="text-sm text-gray-500 mt-0.5">{{ month_name }} {{ year }} — {{ tenant.name }}</p>
     </div>
     <div class="flex flex-wrap gap-2 items-center">
-        <!-- Filtr kontraktu -->
-        <select id="contractFilter"
-                onchange="
-                    const url = new URL(window.location);
-                    url.searchParams.set('year', '{{ year }}');
-                    url.searchParams.set('month', '{{ month }}');
-                    if (this.value) url.searchParams.set('contract_id', this.value);
-                    else url.searchParams.delete('contract_id');
-                    window.location.href = url.toString();"
+        <!-- Filtr kontraktu — instant, bez przeładowania -->
+        <select x-model="selectedContract"
                 class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
             <option value="">Wszyscy pracownicy</option>
             {% for c in contracts %}
-            <option value="{{ c.id }}" {% if selected_contract_id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            <option value="{{ c.id }}">{{ c.name }}</option>
             {% endfor %}
         </select>
+        <!-- Szukaj po nazwisku -->
+        <input x-model="nameSearch" type="text" placeholder="Szukaj pracownika…"
+               class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-44">
+        <!-- Filtr dostępności -->
+        <select x-model="availFilter"
+                class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+            <option value="all">Wszyscy</option>
+            <option value="submitted">Wypełnili grafik</option>
+            <option value="missing">Brak odpowiedzi</option>
+        </select>
+        <!-- Wyczyść filtry -->
+        <button @click="selectedContract = ''; nameSearch = ''; availFilter = 'all'"
+                class="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5">
+            Wyczyść
+        </button>
         <!-- Nawigacja miesiąc -->
         <div class="flex gap-1">
-            <a href="?year={{ prev_year }}&month={{ prev_month }}{% if selected_contract_id %}&contract_id={{ selected_contract_id }}{% endif %}"
+            <a href="?year={{ prev_year }}&month={{ prev_month }}"
                class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">← Poprzedni</a>
-            <a href="?year={{ next_year }}&month={{ next_month }}{% if selected_contract_id %}&contract_id={{ selected_contract_id }}{% endif %}"
+            <a href="?year={{ next_year }}&month={{ next_month }}"
                class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition">Następny →</a>
         </div>
     </div>
@@ -41,23 +56,23 @@
     <span class="flex items-center gap-1.5"><span class="w-4 h-4 rounded bg-white border border-gray-200 inline-block"></span> Brak odpowiedzi</span>
 </div>
 
-{% if employees %}
-<!-- Stats summary -->
+<!-- Stats -->
 <div class="grid grid-cols-3 gap-3 mb-6">
     <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
-        <div class="text-2xl font-bold text-gray-800">{{ employees|length }}</div>
-        <div class="text-xs text-gray-500 mt-1">{% if selected_contract_id %}W kontrakcie{% else %}Pracownicy{% endif %}</div>
+        <div class="text-2xl font-bold text-gray-800">{{ total_employees }}</div>
+        <div class="text-xs text-gray-500 mt-1">Pracownicy</div>
     </div>
     <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
         <div class="text-2xl font-bold text-green-600">{{ submitted_count }}</div>
         <div class="text-xs text-gray-500 mt-1">Wypełniło grafik</div>
     </div>
     <div class="bg-white border border-gray-200 rounded-xl p-4 text-center">
-        <div class="text-2xl font-bold text-gray-400">{{ employees|length - submitted_count }}</div>
+        <div class="text-2xl font-bold text-gray-400">{{ total_employees - submitted_count }}</div>
         <div class="text-xs text-gray-500 mt-1">Oczekuje</div>
     </div>
 </div>
 
+{% if employees %}
 <!-- Tabela kalendarza -->
 <div class="overflow-x-auto rounded-xl border border-gray-200 bg-white">
     <table class="min-w-full text-xs border-collapse">
@@ -79,7 +94,13 @@
         <tbody class="divide-y divide-gray-100">
             {% for emp in employees %}
             {% set sub = submissions_by_emp.get(emp.id) %}
-            <tr class="hover:bg-gray-50 group">
+            {% set has_sub = 'true' if sub else 'false' %}
+            <tr class="hover:bg-gray-50 group"
+                x-show="
+                    (selectedContract === '' || {{ emp_contracts.get(emp.id, []) }}.includes(parseInt(selectedContract))) &&
+                    (nameSearch === '' || '{{ emp.last_name }} {{ emp.first_name }}'.toLowerCase().includes(nameSearch.toLowerCase()) || '{{ emp.first_name }} {{ emp.last_name }}'.toLowerCase().includes(nameSearch.toLowerCase())) &&
+                    (availFilter === 'all' || (availFilter === 'submitted' && {{ has_sub }}) || (availFilter === 'missing' && !{{ has_sub }}))
+                ">
                 <td class="sticky left-0 bg-white group-hover:bg-gray-50 px-3 py-2 border-r border-gray-200 whitespace-nowrap">
                     <div class="font-medium text-gray-800">{{ emp.first_name }} {{ emp.last_name }}</div>
                     {% if not sub %}
@@ -90,9 +111,18 @@
                 </td>
                 {% for d in days %}
                 {% set iso = d.isoformat() %}
-                {% if d.isoformat() in holidays_iso %}
-                    <td class="px-0.5 py-1 text-center bg-red-50" title="{{ holidays_iso[iso] }}">
+                {% if iso in holidays_iso %}
+                    {% set day_status = day_statuses.get(emp.id, {}).get(iso) %}
+                    <td class="px-0.5 py-1 text-center bg-red-50" title="{{ holidays_iso[iso] }}{% if day_status %} — {{ day_status }}{% endif %}">
+                        {% if day_status == 'available' %}
+                        <div class="w-6 h-6 mx-auto rounded bg-green-200 border border-green-300 flex items-center justify-center text-green-600 text-xs font-bold">✓</div>
+                        {% elif day_status == 'partial' %}
+                        <div class="w-6 h-6 mx-auto rounded bg-yellow-200 border border-yellow-300 flex items-center justify-center text-yellow-600 font-bold text-xs">~</div>
+                        {% elif day_status == 'unavailable' %}
+                        <div class="w-6 h-6 mx-auto rounded bg-gray-100 border border-gray-200"></div>
+                        {% else %}
                         <div class="w-6 h-6 mx-auto rounded flex items-center justify-center text-red-300 font-bold text-base">·</div>
+                        {% endif %}
                     </td>
                 {% elif not sub %}
                     <td class="px-0.5 py-1 text-center">
@@ -128,8 +158,10 @@
 
 {% else %}
 <div class="text-center text-gray-400 text-sm py-16 bg-white border border-gray-200 rounded-xl">
-    {% if selected_contract_id %}Brak pracowników w tym kontrakcie.{% else %}Brak pracowników.{% endif %}
+    Brak pracowników.
 </div>
 {% endif %}
+
+</div><!-- end x-data -->
 
 {% endblock %}
