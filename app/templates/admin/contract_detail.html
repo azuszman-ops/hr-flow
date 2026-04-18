@@ -22,6 +22,7 @@
     </div>
     <div x-show="editing" x-cloak>
         <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/edit">
+            <input type="hidden" name="next" value="/admin/{{ tenant.id }}/contracts/{{ contract.id }}">
             <div class="flex flex-wrap gap-3 items-end">
                 <div>
                     <label class="text-xs text-gray-500 block mb-1">Nazwa kontraktu</label>

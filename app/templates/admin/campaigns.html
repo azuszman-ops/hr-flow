@@ -159,7 +159,7 @@ function checkCampaignConflict(form) {
         {% endif %}
         {% set queued_cnt = campaign_queued.get(camp.id, 0) %}
         {% if queued_cnt %}
-        <div class="mt-1 text-xs text-blue-500">⏳ {{ queued_cnt }} wiadomości w kolejce (wyślemy jutro o 00:05 UTC)</div>
+        <div class="mt-1 text-xs text-blue-500">⏳ {{ queued_cnt }} wiadomości w kolejce — wyślemy jutro o 09:00</div>
         {% endif %}
 
         {% set stats = campaign_stats.get(camp.id, {}) %}

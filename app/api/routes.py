@@ -290,6 +290,7 @@ async def edit_contract(
     description: str = Form(""),
     city_1: str = Form(""),
     city_2: str = Form(""),
+    next: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     contract = await db.get(Contract, contract_id)
@@ -299,7 +300,8 @@ async def edit_contract(
         contract.city_1 = city_1 or None
         contract.city_2 = city_2 or None
         await db.commit()
-    return RedirectResponse(f"/admin/{tenant_id}/contracts", status_code=303)
+    redirect_url = next if next else f"/admin/{tenant_id}/contracts"
+    return RedirectResponse(redirect_url, status_code=303)
 
 
 @router.get("/admin/{tenant_id}/contracts/import/template")
@@ -837,6 +839,9 @@ async def send_campaign(
 async def delete_campaign(tenant_id: int, campaign_id: int, db: AsyncSession = Depends(get_db)):
     campaign = await db.get(MessageCampaign, campaign_id)
     if campaign and campaign.tenant_id == tenant_id:
+        await db.execute(delete(QueuedSend).where(QueuedSend.campaign_id == campaign_id))
+        await db.execute(delete(MessageLog).where(MessageLog.campaign_id == campaign_id))
+        await db.execute(delete(CampaignContract).where(CampaignContract.campaign_id == campaign_id))
         await db.delete(campaign)
         await db.commit()
     return RedirectResponse(f"/admin/{tenant_id}/campaigns", status_code=303)
