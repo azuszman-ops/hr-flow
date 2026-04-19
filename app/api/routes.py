@@ -250,8 +250,13 @@ async def admin_contracts(request: Request, tenant_id: int, db: AsyncSession = D
             .options(selectinload(Contract.employee_links).selectinload(ContractEmployee.employee))
         )
     ).scalars().all()
+    all_employees = (
+        await db.execute(
+            select(Employee).where(Employee.tenant_id == tenant_id, Employee.is_active == True).order_by(Employee.last_name, Employee.first_name)
+        )
+    ).scalars().all()
     return templates.TemplateResponse("admin/contracts.html", {
-        "request": request, "tenant": tenant, "contracts": contracts
+        "request": request, "tenant": tenant, "contracts": contracts, "all_employees": all_employees
     })
 
 
@@ -385,6 +390,7 @@ async def add_employee_to_contract(
     tenant_id: int,
     contract_id: int,
     employee_id: int = Form(...),
+    next: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     contract = await db.get(Contract, contract_id)
@@ -404,7 +410,8 @@ async def add_employee_to_contract(
         link = ContractEmployee(contract_id=contract_id, employee_id=employee_id)
         db.add(link)
         await db.commit()
-    return RedirectResponse(f"/admin/{tenant_id}/contracts/{contract_id}", status_code=303)
+    redirect_url = next if next else f"/admin/{tenant_id}/contracts/{contract_id}"
+    return RedirectResponse(redirect_url, status_code=303)
 
 
 @router.post("/admin/{tenant_id}/contracts/{contract_id}/remove_employee/{employee_id}")
@@ -412,6 +419,7 @@ async def remove_employee_from_contract(
     tenant_id: int,
     contract_id: int,
     employee_id: int,
+    next: str = Form(""),
     db: AsyncSession = Depends(get_db),
 ):
     contract = await db.get(Contract, contract_id)
@@ -424,7 +432,8 @@ async def remove_employee_from_contract(
         )
     )
     await db.commit()
-    return RedirectResponse(f"/admin/{tenant_id}/contracts/{contract_id}", status_code=303)
+    redirect_url = next if next else f"/admin/{tenant_id}/contracts/{contract_id}"
+    return RedirectResponse(redirect_url, status_code=303)
 
 
 # ============================================================
