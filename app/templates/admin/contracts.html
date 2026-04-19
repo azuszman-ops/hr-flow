@@ -77,8 +77,34 @@
 <div class="space-y-4">
     {% for contract in contracts %}
     {% set assigned_ids = contract.employee_links | map(attribute='employee_id') | list %}
-    <div class="bg-white border border-gray-200 rounded-xl p-5"
-         x-data="{ editing: false, search: '', assigned: {{ assigned_ids | tojson }} }">
+    <script>
+    function contractApp_{{ contract.id }}() {
+        return {
+            editing: false,
+            search: '',
+            assigned: {{ assigned_ids | tojson }},
+            names: { {% for emp in all_employees %}{{ emp.id }}: '{{ emp.first_name }} {{ emp.last_name }}'{% if not loop.last %}, {% endif %}{% endfor %} },
+            addEmp(id) {
+                if (this.assigned.includes(id)) return;
+                fetch('/admin/{{ tenant.id }}/contracts/{{ contract.id }}/add_employee', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'employee_id=' + id
+                }).then(() => this.assigned.push(id));
+            },
+            removeEmp(id) {
+                fetch('/admin/{{ tenant.id }}/contracts/{{ contract.id }}/remove_employee/' + id, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: ''
+                }).then(() => { this.assigned = this.assigned.filter(a => a !== id); });
+            }
+        };
+    }
+    </script>
+    <div class="bg-white border border-gray-200 rounded-xl p-5" x-data="contractApp_{{ contract.id }}()">
+
+        <!-- Tryb podglądu -->
         <div x-show="!editing">
             <div class="flex items-start justify-between">
                 <div>
@@ -102,7 +128,7 @@
                 </div>
             </div>
             <div class="mt-3 text-xs text-gray-500">
-                Pracownicy: <strong>{{ contract.employee_links|length }}</strong>
+                Pracownicy: <strong x-text="assigned.length">{{ contract.employee_links|length }}</strong>
                 {% if contract.employee_links %}
                 —
                 {% for link in contract.employee_links[:5] %}
@@ -113,6 +139,7 @@
             </div>
         </div>
 
+        <!-- Tryb edycji -->
         <div x-show="editing" x-cloak class="space-y-4">
             <!-- Edycja nazwy i miast -->
             <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/edit" class="space-y-2">
@@ -131,23 +158,17 @@
                 </div>
             </form>
 
-            <!-- Przypisani pracownicy (pillsy z usuń) -->
-            {% if contract.employee_links %}
-            <div>
+            <!-- Przypisani — dynamiczne pillsy (x-for) -->
+            <div x-show="assigned.length > 0">
                 <div class="text-xs text-gray-500 mb-2 font-medium">Przypisani pracownicy:</div>
                 <div class="flex flex-wrap gap-1.5">
-                    {% for link in contract.employee_links %}
-                    <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/remove_employee/{{ link.employee_id }}">
-                        <input type="hidden" name="next" value="/admin/{{ tenant.id }}/contracts">
-                        <button type="submit"
-                                class="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-1 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition">
-                            {{ link.employee.first_name }} {{ link.employee.last_name }} ×
-                        </button>
-                    </form>
-                    {% endfor %}
+                    <template x-for="empId in assigned" :key="empId">
+                        <button @click.prevent="removeEmp(empId)"
+                                class="text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded-full px-2.5 py-1 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition"
+                                x-text="(names[empId] || '#' + empId) + ' ×'"></button>
+                    </template>
                 </div>
             </div>
-            {% endif %}
 
             <!-- Live search — dodaj pracownika -->
             {% if all_employees %}
@@ -160,14 +181,11 @@
                 </div>
                 <div class="border border-gray-200 rounded-lg overflow-hidden max-h-52 overflow-y-auto">
                     {% for emp in all_employees %}
-                    <div x-show="!assigned.includes({{ emp.id }}) && (search === '' || '{{ emp.first_name }} {{ emp.last_name }}'.toLowerCase().includes(search.toLowerCase()))"
+                    <div data-name="{{ emp.first_name }} {{ emp.last_name }}"
+                         x-show="!assigned.includes({{ emp.id }}) && (search === '' || $el.dataset.name.toLowerCase().includes(search.toLowerCase()))"
                          class="flex items-center justify-between px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-0"
-                         @click="$el.querySelector('form').submit()">
+                         @click="addEmp({{ emp.id }})">
                         <span class="text-sm text-gray-800 pointer-events-none">{{ emp.first_name }} {{ emp.last_name }}</span>
-                        <form method="post" action="/admin/{{ tenant.id }}/contracts/{{ contract.id }}/add_employee">
-                            <input type="hidden" name="employee_id" value="{{ emp.id }}">
-                            <input type="hidden" name="next" value="/admin/{{ tenant.id }}/contracts">
-                        </form>
                         <span class="text-xs text-green-600 font-medium pointer-events-none">+ Dodaj</span>
                     </div>
                     {% endfor %}
