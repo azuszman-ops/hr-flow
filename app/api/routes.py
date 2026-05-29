@@ -659,7 +659,7 @@ async def admin_campaigns(request: Request, tenant_id: int, db: AsyncSession = D
             elif log.is_reminder_2:
                 e["r2"] = log
         for sub in all_submissions:
-            if sub.year == camp.year and sub.month == camp.month:
+            if sub.year == camp.year and sub.month == camp.month and sub.employee_id in emp_map:
                 emp_map[sub.employee_id]["filled"] = True
         campaign_stats[camp.id] = emp_map
 
