@@ -20,13 +20,13 @@
         {% if part.type == 'html' %}{{ part.html }}
         {% elif part.att.is_image %}
         <figure class="my-4 flex flex-col gap-1.5">
-            <img src="/o/{{ slug }}/file/{{ part.att.id }}" alt="{{ part.att.caption or part.att.filename }}" class="w-full rounded-xl" style="border: 1px solid var(--line)">
-            {% if part.att.caption %}<figcaption class="text-[12px] leading-[1.4]" style="color: var(--muted-2)">{{ part.att.caption }}</figcaption>{% endif %}
+            <img src="/o/{{ slug }}/file/{{ part.att.id }}" alt="{{ part.att.caption_for(lang) or part.att.filename }}" class="w-full rounded-xl" style="border: 1px solid var(--line)">
+            {% if part.att.caption_for(lang) %}<figcaption class="text-[12px] leading-[1.4]" style="color: var(--muted-2)">{{ part.att.caption_for(lang) }}</figcaption>{% endif %}
         </figure>
         {% elif part.att.is_pdf %}
         <a href="/o/{{ slug }}/file/{{ part.att.id }}" target="_blank" class="my-4 flex items-center gap-3 rounded-xl px-3.5 py-3 hover:bg-[#f5f8fa]" style="border: 1.5px solid var(--line)">
             <span class="text-[11px] font-bold text-white rounded-md px-[7px] py-1" style="background: var(--petrol)">PDF</span>
-            <span class="flex-1 min-w-0 text-[13px] font-semibold leading-[1.35]" style="color: var(--ink)">{{ part.att.caption or part.att.filename }}</span>
+            <span class="flex-1 min-w-0 text-[13px] font-semibold leading-[1.35]" style="color: var(--ink)">{{ part.att.caption_for(lang) or part.att.filename }}</span>
             <span class="text-[13px] font-semibold whitespace-nowrap" style="color: var(--primary)">{{ t('open_pdf') }} ›</span>
         </a>
         {% endif %}

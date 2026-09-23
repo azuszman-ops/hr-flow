@@ -156,6 +156,7 @@ async def _ensure_schema(db: AsyncSession):
     if _SCHEMA_READY:
         return
     await db.execute(text("ALTER TABLE onboarding_settings ADD COLUMN IF NOT EXISTS help_phone VARCHAR(40)"))
+    await db.execute(text("ALTER TABLE onboarding_attachments ADD COLUMN IF NOT EXISTS caption_i18n TEXT"))
     await db.commit()
     _SCHEMA_READY = True
 

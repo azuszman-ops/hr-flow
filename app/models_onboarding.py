@@ -101,10 +101,22 @@ class OnboardingAttachment(Base):
     size = Column(Integer, nullable=False, default=0)
     data = Column(LargeBinary, nullable=False)
     caption = Column(String(300), nullable=True)
+    caption_i18n = Column(Text, nullable=True)   # JSON {"en": "...", "uk": "..."}; brak = caption PL
     sort_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     module = relationship("OnboardingModule", back_populates="attachments")
+
+    def caption_for(self, lang: str) -> str | None:
+        if lang != "pl" and self.caption_i18n:
+            try:
+                import json
+                val = json.loads(self.caption_i18n).get(lang)
+                if val:
+                    return val
+            except Exception:
+                pass
+        return self.caption
 
     @property
     def is_image(self) -> bool:

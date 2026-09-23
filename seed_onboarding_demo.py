@@ -176,6 +176,7 @@ async def main():
     async with AsyncSessionLocal() as db:
         from sqlalchemy import text
         await db.execute(text("ALTER TABLE onboarding_settings ADD COLUMN IF NOT EXISTS help_phone VARCHAR(40)"))
+        await db.execute(text("ALTER TABLE onboarding_attachments ADD COLUMN IF NOT EXISTS caption_i18n TEXT"))
         await db.commit()
         tenant = (await db.execute(select(Tenant).where(Tenant.slug == "find-work"))).scalar_one_or_none()
         if not tenant:
