@@ -5,20 +5,20 @@
         <div class="max-w-xl mx-auto">
             <div class="flex items-center justify-between gap-2">
                 {% if has_logo %}
-                <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="logo-white h-6 w-auto -ml-1">
+                <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="logo-white h-9 w-auto -ml-1">
                 {% else %}
                 <span class="font-bold text-lg tracking-wide">{{ brand }}</span>
                 {% endif %}
-                <div class="flex items-center gap-2">
-                    {% if ready_langs|length > 1 %}
-                    {% for l in ready_langs %}
-                    <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill"
-                       style="{% if l == lang %}background: #fff; color: var(--petrol); border-color: #fff{% else %}background: transparent; color: #fff; border-color: rgba(255,255,255,.4){% endif %}">{{ LANG_LABELS[l] }}</a>
-                    {% endfor %}
-                    {% endif %}
-                    <form method="post" action="/o/{{ slug }}/logout"><button class="text-[12px] font-medium" style="color: #cfe6f2">{{ t('logout') }}</button></form>
-                </div>
+                <form method="post" action="/o/{{ slug }}/logout"><button class="text-[12px] font-medium" style="color: #cfe6f2">{{ t('logout') }}</button></form>
             </div>
+            {% if ready_langs|length > 1 %}
+            <div class="flex gap-1.5 mt-4 overflow-x-auto">
+                {% for l in ready_langs %}
+                <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill shrink-0"
+                   style="{% if l == lang %}background: #fff; color: var(--petrol); border-color: #fff{% else %}background: transparent; color: #fff; border-color: rgba(255,255,255,.4){% endif %}">{{ LANG_LABELS[l] }}</a>
+                {% endfor %}
+            </div>
+            {% endif %}
             <div class="mt-9 w-16 h-16 rounded-full text-white text-[30px] font-bold flex items-center justify-center" style="background: var(--done); box-shadow: 0 0 0 8px rgba(0,163,173,.25)">&#10003;</div>
             <div class="mt-[22px] text-[32px] font-bold">{{ t('done_title') }}</div>
             <div class="mt-1.5 text-[15px] leading-[1.5]" style="color: #e3f0f7">{{ t('done_intro') }}</div>

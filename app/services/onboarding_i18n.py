@@ -12,9 +12,9 @@ LANG_LABELS = {"pl": "PL", "en": "EN", "uk": "UA", "es": "ES", "ru": "RU"}
 LANG_NAMES = {"pl": "Polski", "en": "English", "uk": "Українська", "es": "Español", "ru": "Русский"}
 SUPPORTED_LANGS = ["pl", "en", "uk", "es", "ru"]
 
-# Języki widoczne w przełączniku na stronie pracownika. Treści modułów w innych językach
-# pokazują się dopiero po tłumaczeniu w edytorze, więc przełącznik włączamy po przetłumaczeniu treści.
-READY_LANGS = ["pl"]
+# Języki widoczne w przełączniku na stronie pracownika (Albert 23.09: wszystkie od razu).
+# Treść modułu bez tłumaczenia w bazie pokazuje się po polsku.
+READY_LANGS = ["pl", "en", "uk", "es", "ru"]
 
 STRINGS = {
     "pl": {
@@ -35,7 +35,7 @@ STRINGS = {
         "s2": "Przejdź moduły",
         "s3": "Potwierdź i gotowe",
         "logout": "Wyloguj",
-        "hi": "Cześć,",
+        "hi": "Cześć",
         "progress": "{acked} z {total} ukończone",
         "meta": "{modules} · ok. {min} min",
         "meta_short": "{modules}",
@@ -79,7 +79,7 @@ STRINGS = {
         "s2": "Go through the modules",
         "s3": "Confirm and you're done",
         "logout": "Log out",
-        "hi": "Hi,",
+        "hi": "Hi",
         "progress": "{acked} of {total} completed",
         "meta": "{modules} · approx. {min} min",
         "meta_short": "{modules}",
@@ -123,7 +123,7 @@ STRINGS = {
         "s2": "Completa los módulos",
         "s3": "Confirma y listo",
         "logout": "Salir",
-        "hi": "Hola,",
+        "hi": "Hola",
         "progress": "{acked} de {total} completados",
         "meta": "{modules} · aprox. {min} min",
         "meta_short": "{modules}",
@@ -167,7 +167,7 @@ STRINGS = {
         "s2": "Пройдіть модулі",
         "s3": "Підтвердьте і готово",
         "logout": "Вийти",
-        "hi": "Привіт,",
+        "hi": "Привіт",
         "progress": "{acked} з {total} завершено",
         "meta": "{modules} · бл. {min} хв",
         "meta_short": "{modules}",
@@ -211,7 +211,7 @@ STRINGS = {
         "s2": "Пройдите модули",
         "s3": "Подтвердите и готово",
         "logout": "Выйти",
-        "hi": "Привет,",
+        "hi": "Привет",
         "progress": "{acked} из {total} завершено",
         "meta": "{modules} · около {min} мин",
         "meta_short": "{modules}",

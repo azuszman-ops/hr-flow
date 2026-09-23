@@ -2,7 +2,7 @@
 {% block content %}
 <div class="flex flex-col gap-2.5">
     <div class="text-[28px] leading-[1.15]" style="color: var(--ink)">
-        <span class="font-light">{{ t('hi') }}</span> <b class="font-bold">{{ person.employee.first_name }}</b>
+        <span class="font-light">{{ t('hi') }}</span> <b class="font-bold">{{ person.employee.first_name }}</b> <span aria-hidden="true">&#128075;</span>
     </div>
     {% if person.segment %}
     <div class="self-start text-[12px] font-semibold rounded-full px-3 py-1.5" style="color: var(--petrol); background: #e1eef5">{{ person.segment.name }}</div>
