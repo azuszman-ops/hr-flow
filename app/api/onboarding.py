@@ -230,9 +230,9 @@ async def send_link(db: AsyncSession, tenant: Tenant, person: OnboardingPerson, 
         return {"status": "failed", "error": "Brak poprawnego numeru WhatsApp (format +48...)."}
     if not TEMPLATE_ONBOARDING:
         return {"status": "failed", "error": "Szablon WhatsApp nie jest jeszcze skonfigurowany (ONBOARDING_TEMPLATE_SID)."}
-    link = build_login_link(tenant.slug, emp.token)
-    # Szablon Meta: {{1}} imię, {{2}} link (nazwa firmy wpisana na stałe w treści szablonu)
-    result = await send_whatsapp(emp.phone_whatsapp, TEMPLATE_ONBOARDING, {"1": emp.first_name, "2": link})
+    # Szablon Meta (findwork_wprowadzenie_pl_v3): {{1}} imię, {{2}} token osoby. Adres strony jest wpisany
+    # na stałe w treści szablonu (Meta odrzuca cały URL jako zmienną), więc zmiana domeny = nowy szablon.
+    result = await send_whatsapp(emp.phone_whatsapp, TEMPLATE_ONBOARDING, {"1": emp.first_name, "2": emp.token})
     db.add(OnboardingMessage(
         person_id=person.id, phone=emp.phone_whatsapp, status=result["status"],
         external_id=result.get("external_id"), error_message=result.get("error"),
