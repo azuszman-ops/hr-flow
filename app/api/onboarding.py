@@ -39,6 +39,8 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 
 TEMPLATE_ONBOARDING = os.getenv("ONBOARDING_TEMPLATE_SID")   # Twilio Content Template SID (po akceptacji Meta)
 STAFF_KEY = os.getenv("ONBOARDING_STAFF_KEY")               # odblokowuje edytor treści dla Scaling Labs
+# Do startu u klienta (Albert 23.09: ukryć do poniedziałku 28.09): panel onboardingu widzą tylko sesje staff.
+HIDDEN = os.getenv("ONBOARDING_HIDDEN", "") == "1"
 MAX_UPLOAD = 8 * 1024 * 1024                                 # 8 MB na plik
 ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"}
 
@@ -161,6 +163,12 @@ async def _ensure_schema(db: AsyncSession):
     _SCHEMA_READY = True
 
 
+def require_visible(request: Request, tenant_id: int):
+    """Gdy ONBOARDING_HIDDEN=1, panel onboardingu jest dostępny tylko dla sesji staff (klient dostaje 404)."""
+    if HIDDEN and not is_staff(request, tenant_id):
+        raise HTTPException(404)
+
+
 async def get_settings(db: AsyncSession, tenant: Tenant) -> OnboardingSettings:
     await _ensure_schema(db)
     s = (await db.execute(
@@ -265,6 +273,7 @@ async def send_link(db: AsyncSession, tenant: Tenant, person: OnboardingPerson, 
 @router.get("/admin/{tenant_id}/onboarding", response_class=HTMLResponse)
 async def ob_admin_list(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db),
                         tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     settings = await get_settings(db, tenant)
     persons = await load_persons(db, tenant_id)
     segments = await load_segments(db, tenant_id, active_only=True)
@@ -299,6 +308,7 @@ async def ob_admin_create_person(
     segment_id: int = Form(None), language: str = Form("pl"), first_day_info: str = Form(""),
     db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant),
 ):
+    require_visible(request, tenant_id)
     if not (1 <= birth_day <= 31 and 1 <= birth_month <= 12):
         return RedirectResponse(f"/admin/{tenant_id}/onboarding?err=Nieprawidłowa+data+urodzenia", status_code=303)
 
@@ -339,6 +349,7 @@ async def ob_admin_create_person(
 @router.get("/admin/{tenant_id}/onboarding/persons/{person_id}", response_class=HTMLResponse)
 async def ob_admin_person(request: Request, tenant_id: int, person_id: int,
                           db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     settings = await get_settings(db, tenant)
     p = await get_person_or_404(db, tenant_id, person_id)
     segments = await load_segments(db, tenant_id, active_only=True)
@@ -416,6 +427,7 @@ async def ob_admin_send_all(tenant_id: int, db: AsyncSession = Depends(get_db),
 @router.post("/admin/{tenant_id}/onboarding/persons/{person_id}/preview")
 async def ob_admin_preview(request: Request, tenant_id: int, person_id: int,
                            db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     """Podgląd strony pracownika oczami tej osoby (bez logowania kodem, bez wpisu w rejestrze)."""
     p = await get_person_or_404(db, tenant_id, person_id)
     request.session[f"ob_emp_{tenant_id}"] = p.id
@@ -445,6 +457,7 @@ async def require_editor(request: Request, tenant_id: int, db: AsyncSession, ten
 @router.get("/admin/{tenant_id}/onboarding/segments", response_class=HTMLResponse)
 async def ob_admin_segments(request: Request, tenant_id: int, db: AsyncSession = Depends(get_db),
                             tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     settings = await require_editor(request, tenant_id, db, tenant)
     segments = await load_segments(db, tenant_id)
     counts = dict((await db.execute(
@@ -462,6 +475,7 @@ async def ob_admin_segments(request: Request, tenant_id: int, db: AsyncSession =
 async def ob_admin_segment_create(request: Request, tenant_id: int, name: str = Form(...),
                                   description: str = Form(""), db: AsyncSession = Depends(get_db),
                                   tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     n = (await db.execute(select(func.count(OnboardingSegment.id))
                           .where(OnboardingSegment.tenant_id == tenant_id))).scalar() or 0
@@ -476,6 +490,7 @@ async def ob_admin_segment_create(request: Request, tenant_id: int, name: str = 
 async def ob_admin_segment_edit(request: Request, tenant_id: int, segment_id: int, name: str = Form(...),
                                 description: str = Form(""), is_active: str = Form("on"),
                                 db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     seg = await db.get(OnboardingSegment, segment_id)
     if not seg or seg.tenant_id != tenant_id:
@@ -488,6 +503,7 @@ async def ob_admin_segment_edit(request: Request, tenant_id: int, segment_id: in
 @router.post("/admin/{tenant_id}/onboarding/segments/{segment_id}/delete")
 async def ob_admin_segment_delete(request: Request, tenant_id: int, segment_id: int,
                                   db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     seg = await db.get(OnboardingSegment, segment_id)
     if not seg or seg.tenant_id != tenant_id:
@@ -500,6 +516,7 @@ async def ob_admin_segment_delete(request: Request, tenant_id: int, segment_id: 
 @router.get("/admin/{tenant_id}/onboarding/segments/{segment_id}", response_class=HTMLResponse)
 async def ob_admin_segment(request: Request, tenant_id: int, segment_id: int,
                            db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     settings = await require_editor(request, tenant_id, db, tenant)
     seg = (await db.execute(
         select(OnboardingSegment).where(OnboardingSegment.id == segment_id, OnboardingSegment.tenant_id == tenant_id)
@@ -538,6 +555,7 @@ async def ob_admin_module_create(request: Request, tenant_id: int, segment_id: i
                                  title: str = Form(...), body: str = Form(""), estimated_minutes: int = Form(None),
                                  files: list[UploadFile] = File(None),
                                  db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     seg = await db.get(OnboardingSegment, segment_id)
     if not seg or seg.tenant_id != tenant_id:
@@ -571,6 +589,7 @@ async def ob_admin_module_edit(request: Request, tenant_id: int, module_id: int,
                                title: str = Form(...), body: str = Form(""), estimated_minutes: int = Form(None),
                                files: list[UploadFile] = File(None),
                                db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     mod = await _get_module(db, tenant_id, module_id)
     mod.title, mod.body, mod.estimated_minutes = title.strip(), body.strip(), estimated_minutes or None
@@ -584,6 +603,7 @@ async def ob_admin_module_edit(request: Request, tenant_id: int, module_id: int,
 async def ob_admin_module_translation(request: Request, tenant_id: int, module_id: int,
                                       lang: str = Form(...), title: str = Form(""), body: str = Form(""),
                                       db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     mod = await _get_module(db, tenant_id, module_id)
     lang = normalize_lang(lang)
@@ -603,6 +623,7 @@ async def ob_admin_module_translation(request: Request, tenant_id: int, module_i
 @router.post("/admin/{tenant_id}/onboarding/modules/{module_id}/move")
 async def ob_admin_module_move(request: Request, tenant_id: int, module_id: int, direction: str = Form(...),
                                db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     mod = await _get_module(db, tenant_id, module_id)
     siblings = (await db.execute(
@@ -622,6 +643,7 @@ async def ob_admin_module_move(request: Request, tenant_id: int, module_id: int,
 @router.post("/admin/{tenant_id}/onboarding/modules/{module_id}/delete")
 async def ob_admin_module_delete(request: Request, tenant_id: int, module_id: int,
                                  db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     mod = await _get_module(db, tenant_id, module_id)
     seg_id = mod.segment_id
@@ -633,6 +655,7 @@ async def ob_admin_module_delete(request: Request, tenant_id: int, module_id: in
 @router.post("/admin/{tenant_id}/onboarding/attachments/{attachment_id}/delete")
 async def ob_admin_attachment_delete(request: Request, tenant_id: int, attachment_id: int,
                                      db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     await require_editor(request, tenant_id, db, tenant)
     att = await db.get(OnboardingAttachment, attachment_id)
     if not att:
@@ -668,6 +691,7 @@ async def ob_admin_settings(request: Request, tenant_id: int, brand_name: str = 
                             help_phone: str = Form(""),
                             logo: UploadFile = File(None), remove_logo: str = Form(""),
                             db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
+    require_visible(request, tenant_id)
     settings = await require_editor(request, tenant_id, db, tenant)
     settings.brand_name = brand_name.strip() or tenant.name
     if re.fullmatch(r"#[0-9a-fA-F]{6}", brand_color.strip()):
@@ -804,6 +828,10 @@ async def ob_emp_login(request: Request, slug: str, phone: str = Form(""), code:
         person.first_login_at = now
     person.last_login_at = now
     db.add(OnboardingLogin(person_id=person.id, user_agent=(request.headers.get("user-agent") or "")[:300]))
+    # Język wybrany na ekranie logowania ma pierwszeństwo i zostaje zapisany przy osobie (Albert 23.09).
+    chosen = request.session.get(f"ob_lang_{tenant.id}")
+    if chosen:
+        person.language = normalize_lang(chosen)
     await db.commit()
     request.session[f"ob_emp_{tenant.id}"] = person.id
     request.session[f"ob_lang_{tenant.id}"] = person.language
