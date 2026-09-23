@@ -1,0 +1,16 @@
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <div class="text-sm text-gray-400 mb-1">Onboarding</div>
+        <h1 class="text-2xl font-bold text-gray-800">{{ page_title }}</h1>
+    </div>
+    <div class="flex items-center gap-2 text-sm">
+        <a href="/admin/{{ tenant.id }}/onboarding"
+           class="px-3 py-1.5 rounded-lg {% if active == 'persons' %}bg-blue-600 text-white{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Osoby</a>
+        {% if can_edit %}
+        <a href="/admin/{{ tenant.id }}/onboarding/segments"
+           class="px-3 py-1.5 rounded-lg {% if active == 'segments' %}bg-blue-600 text-white{% else %}text-gray-600 hover:bg-gray-100{% endif %}">Segmenty i treści</a>
+        {% endif %}
+    </div>
+</div>
+{% if msg %}<div class="mb-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-2">{{ msg }}</div>{% endif %}
+{% if err %}<div class="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-2">{{ err }}</div>{% endif %}

@@ -1,0 +1,123 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ seg.name }} - treści{% endblock %}
+{% block content %}
+{% set page_title = seg.name %}
+{% set active = "segments" %}
+{% include "onboarding/_admin_nav.html" %}
+
+<div class="text-sm mb-4"><a href="/admin/{{ tenant.id }}/onboarding/segments" class="text-blue-500 hover:underline">← Wszystkie segmenty</a></div>
+
+<!-- Ustawienia segmentu -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-6" x-data="{ open: false }">
+    <div class="flex items-center justify-between">
+        <div>
+            <div class="font-semibold text-gray-800">{{ seg.name }}</div>
+            <div class="text-xs text-gray-400">{{ seg.modules|selectattr('is_active')|list|length }} modułów{% if seg.description %} · {{ seg.description }}{% endif %}{% if not seg.is_active %} · <span class="text-red-400">wyłączony</span>{% endif %}</div>
+        </div>
+        <button @click="open = !open" class="text-xs text-blue-500 hover:underline">Zmień nazwę / opis</button>
+    </div>
+    <form x-show="open" x-cloak method="post" action="/admin/{{ tenant.id }}/onboarding/segments/{{ seg.id }}/edit" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        <input name="name" value="{{ seg.name }}" required class="border border-gray-300 rounded-lg px-3 py-2">
+        <input name="description" value="{{ seg.description or '' }}" placeholder="Opis" class="border border-gray-300 rounded-lg px-3 py-2">
+        <label class="flex items-center gap-2 text-xs text-gray-500"><input type="checkbox" name="is_active" {% if seg.is_active %}checked{% endif %}> segment aktywny (widoczny przy dodawaniu osób)</label>
+        <div class="flex gap-3 items-center">
+            <button type="submit" class="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700">Zapisz</button>
+        </div>
+    </form>
+    <form method="post" action="/admin/{{ tenant.id }}/onboarding/segments/{{ seg.id }}/delete" class="mt-2" x-show="open" x-cloak
+          onsubmit="return confirm('Usunąć cały segment razem z modułami i potwierdzeniami? Tego nie da się cofnąć.')">
+        <button type="submit" class="text-xs text-red-400 hover:text-red-600">Usuń segment</button>
+    </form>
+</div>
+
+<!-- Moduły -->
+<div class="space-y-4 mb-6">
+    {% for m in seg.modules %}
+    <div id="m{{ m.id }}" class="bg-white border border-gray-200 rounded-xl p-5" x-data="{ edit: false, tr: false }">
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex items-start gap-3">
+                <div class="w-8 h-8 rounded-full bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center text-sm font-semibold shrink-0">{{ loop.index }}</div>
+                <div>
+                    <div class="font-semibold text-gray-800">{{ m.title }}</div>
+                    <div class="text-xs text-gray-400">
+                        {% if m.estimated_minutes %}{{ m.estimated_minutes }} min · {% endif %}
+                        {{ m.attachments|length }} załączników ·
+                        tłumaczenia: {% for l in SUPPORTED_LANGS if l != 'pl' %}<span class="{% if m.translations|selectattr('lang', 'equalto', l)|list %}text-green-600{% else %}text-gray-300{% endif %}">{{ LANG_LABELS[l] }}</span> {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 text-xs shrink-0">
+                <form method="post" action="/admin/{{ tenant.id }}/onboarding/modules/{{ m.id }}/move"><input type="hidden" name="direction" value="up"><button class="text-gray-400 hover:text-gray-700 px-1" title="W górę">▲</button></form>
+                <form method="post" action="/admin/{{ tenant.id }}/onboarding/modules/{{ m.id }}/move"><input type="hidden" name="direction" value="down"><button class="text-gray-400 hover:text-gray-700 px-1" title="W dół">▼</button></form>
+                <button @click="edit = !edit; tr = false" class="text-blue-500 hover:underline">Edytuj</button>
+                <button @click="tr = !tr; edit = false" class="text-blue-500 hover:underline">Tłumaczenia</button>
+                <form method="post" action="/admin/{{ tenant.id }}/onboarding/modules/{{ m.id }}/delete" onsubmit="return confirm('Usunąć moduł „{{ m.title }}”?')"><button class="text-red-400 hover:text-red-600">Usuń</button></form>
+            </div>
+        </div>
+
+        <div class="mt-3 text-sm text-gray-600 ob-preview" x-show="!edit && !tr">{{ m.body|ob_body }}</div>
+
+        {% if m.attachments %}
+        <div class="mt-3 flex flex-wrap gap-2" x-show="!edit && !tr">
+            {% for a in m.attachments %}
+            <div class="border border-gray-200 rounded-lg p-2 text-xs text-gray-600 flex items-center gap-2 bg-gray-50">
+                {% if a.is_image %}<img src="/admin/{{ tenant.id }}/onboarding/attachments/{{ a.id }}" class="h-12 w-12 object-cover rounded">{% else %}<span class="text-red-500 font-semibold">PDF</span>{% endif %}
+                <a href="/admin/{{ tenant.id }}/onboarding/attachments/{{ a.id }}" target="_blank" class="hover:underline max-w-[160px] truncate">{{ a.filename }}</a>
+                <form method="post" action="/admin/{{ tenant.id }}/onboarding/attachments/{{ a.id }}/delete" onsubmit="return confirm('Usunąć plik?')"><button class="text-red-400 hover:text-red-600">✕</button></form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Edycja -->
+        <form x-show="edit" x-cloak method="post" action="/admin/{{ tenant.id }}/onboarding/modules/{{ m.id }}/edit" enctype="multipart/form-data" class="mt-4 space-y-3 text-sm">
+            <input name="title" value="{{ m.title }}" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+            <textarea name="body" rows="10" class="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs">{{ m.body }}</textarea>
+            <div class="grid grid-cols-2 gap-3">
+                <input name="estimated_minutes" type="number" min="1" value="{{ m.estimated_minutes or '' }}" placeholder="Szacowany czas (min)" class="border border-gray-300 rounded-lg px-3 py-2">
+                <input type="file" name="files" multiple accept="image/*,application/pdf" class="text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700">
+            </div>
+            <div class="text-xs text-gray-400">Akapity oddzielaj pustą linią. Lista: każda linia zaczyna się od „- ". Nowe pliki dodają się do istniejących.</div>
+            <button type="submit" class="bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">Zapisz moduł</button>
+        </form>
+
+        <!-- Tłumaczenia -->
+        <div x-show="tr" x-cloak class="mt-4 space-y-4" x-data="{ lang: 'en' }">
+            <div class="flex gap-2 text-xs">
+                {% for l in SUPPORTED_LANGS if l != 'pl' %}
+                <button @click="lang = '{{ l }}'" :class="lang === '{{ l }}' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600'" class="px-3 py-1 rounded-lg">{{ LANG_LABELS[l] }}</button>
+                {% endfor %}
+            </div>
+            {% for l in SUPPORTED_LANGS if l != 'pl' %}
+            {% set trx = (m.translations|selectattr('lang', 'equalto', l)|list|first) %}
+            <form x-show="lang === '{{ l }}'" method="post" action="/admin/{{ tenant.id }}/onboarding/modules/{{ m.id }}/translation" class="space-y-2 text-sm">
+                <input type="hidden" name="lang" value="{{ l }}">
+                <input name="title" value="{{ trx.title if trx else '' }}" placeholder="Tytuł ({{ LANG_NAMES[l] }})" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                <textarea name="body" rows="8" placeholder="Treść ({{ LANG_NAMES[l] }}). Puste = pracownik zobaczy wersję polską." class="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-xs">{{ trx.body if trx else '' }}</textarea>
+                <button type="submit" class="bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">Zapisz {{ LANG_LABELS[l] }}</button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Nowy moduł -->
+<div class="bg-white border border-dashed border-gray-300 rounded-xl p-5" x-data="{ open: {{ 'true' if not seg.modules else 'false' }} }">
+    <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">+ Dodaj moduł</button>
+    <form x-show="open" x-cloak method="post" action="/admin/{{ tenant.id }}/onboarding/segments/{{ seg.id }}/modules" enctype="multipart/form-data" class="mt-4 space-y-3 text-sm">
+        <input name="title" placeholder="Tytuł modułu, np. Bezpieczeństwo na hali *" required class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        <textarea name="body" rows="8" placeholder="Treść. Akapity oddzielaj pustą linią. Lista: linie zaczynające się od „- "." class="w-full border border-gray-300 rounded-lg px-3 py-2"></textarea>
+        <div class="grid grid-cols-2 gap-3">
+            <input name="estimated_minutes" type="number" min="1" placeholder="Szacowany czas (min)" class="border border-gray-300 rounded-lg px-3 py-2">
+            <input type="file" name="files" multiple accept="image/*,application/pdf" class="text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700">
+        </div>
+        <button type="submit" class="bg-blue-600 text-white rounded-lg px-5 py-2 font-medium hover:bg-blue-700">Dodaj moduł</button>
+    </form>
+</div>
+
+<style>
+.ob-preview p { margin-bottom: .5rem; }
+.ob-preview ul.ob-list { list-style: disc; padding-left: 1.25rem; margin-bottom: .5rem; }
+</style>
+{% endblock %}

@@ -1,0 +1,186 @@
+{% extends "admin/base.html" %}
+{% block title %}Onboarding - {{ tenant.name }}{% endblock %}
+{% block content %}
+{% set page_title = "Onboarding - " ~ tenant.name %}
+{% set active = "persons" %}
+{% include "onboarding/_admin_nav.html" %}
+
+<div x-data="{ search: '', filter: 'all' }">
+
+<!-- Statystyki -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+        <div class="text-2xl font-bold text-gray-800">{{ stats.total }}</div>
+        <div class="text-sm text-gray-500">Osób w onboardingu</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+        <div class="text-2xl font-bold text-green-600">{{ stats.done }}</div>
+        <div class="text-sm text-gray-500">Ukończony</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+        <div class="text-2xl font-bold text-blue-600">{{ stats.progress }}</div>
+        <div class="text-sm text-gray-500">W trakcie</div>
+    </div>
+    <div class="bg-white border border-gray-200 rounded-xl p-4">
+        <div class="text-2xl font-bold text-gray-500">{{ stats.sent + stats.new }}</div>
+        <div class="text-sm text-gray-500">Jeszcze nie zaczęli</div>
+    </div>
+</div>
+
+{% if not segments %}
+<div class="mb-6 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+    Nie ma jeszcze żadnego segmentu z treściami. Osoby można dodać, ale link do onboardingu ma sens dopiero, gdy segment ma moduły.
+</div>
+{% endif %}
+
+<!-- Dodaj osobę -->
+<div class="bg-white border border-gray-200 rounded-xl p-5 mb-6" x-data="{ open: false, mode: 'new' }">
+    <div class="flex items-center justify-between">
+        <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">+ Dodaj osobę</button>
+        <div class="flex items-center gap-3 text-xs text-gray-400">
+            <span>Strona pracownika: <a href="{{ login_url }}" target="_blank" class="text-blue-500 hover:underline">{{ login_url }}</a></span>
+        </div>
+    </div>
+    <form x-show="open" x-cloak method="post" action="/admin/{{ tenant.id }}/onboarding/persons" class="mt-4 space-y-3">
+        <div class="flex gap-4 text-sm">
+            <label class="flex items-center gap-1.5"><input type="radio" value="new" x-model="mode"> Nowa osoba</label>
+            <label class="flex items-center gap-1.5"><input type="radio" value="existing" x-model="mode"> Z listy pracowników HR-Flow</label>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <template x-if="mode === 'new'">
+                <input name="first_name" placeholder="Imię *" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </template>
+            <template x-if="mode === 'new'">
+                <input name="last_name" placeholder="Nazwisko *" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </template>
+            <template x-if="mode === 'new'">
+                <input name="phone_whatsapp" placeholder="Telefon WhatsApp * (+48...)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+            </template>
+            <template x-if="mode === 'existing'">
+                <select name="employee_id" class="col-span-2 lg:col-span-3 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400">
+                    <option value="">-- wybierz pracownika --</option>
+                    {% for e in employees %}
+                    <option value="{{ e.id }}">{{ e.last_name }} {{ e.first_name }}{% if e.phone_whatsapp %} ({{ e.phone_whatsapp }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+            </template>
+        </div>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="flex gap-2">
+                <select name="birth_day" required class="flex-1 border border-gray-300 rounded-lg px-2 py-2 text-sm">
+                    <option value="">Dzień ur. *</option>
+                    {% for d in range(1, 32) %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+                </select>
+                <select name="birth_month" required class="flex-1 border border-gray-300 rounded-lg px-2 py-2 text-sm">
+                    <option value="">Miesiąc ur. *</option>
+                    {% for m in range(1, 13) %}<option value="{{ m }}">{{ MONTHS_PL[m-1] }}</option>{% endfor %}
+                </select>
+            </div>
+            <select name="segment_id" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                <option value="">-- Segment --</option>
+                {% for s in segments %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+            </select>
+            <select name="language" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+                {% for l in SUPPORTED_LANGS %}<option value="{{ l }}">{{ LANG_LABELS[l] }} - {{ LANG_NAMES[l] }}</option>{% endfor %}
+            </select>
+            <input name="first_day_info" placeholder="Pierwszy dzień (godzina, miejsce, koordynator)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+        </div>
+        <div class="text-xs text-gray-400">Kod logowania to dzień i miesiąc urodzenia, np. 8 marca = 0803. Login to numer telefonu.</div>
+        <button type="submit" class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700 transition">Dodaj</button>
+    </form>
+</div>
+
+<!-- Pasek narzędzi listy -->
+<div class="flex items-center justify-between mb-3 gap-3" x-data="{ sending: false, result: null }">
+    <div class="flex items-center gap-2">
+        <input x-model="search" type="text" placeholder="Szukaj osoby…" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 w-52">
+        <select x-model="filter" class="border border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+            <option value="all">Wszyscy</option>
+            <option value="new">Nie wysłano</option>
+            <option value="sent">Link wysłany</option>
+            <option value="progress">W trakcie</option>
+            <option value="done">Ukończony</option>
+        </select>
+    </div>
+    <div class="flex items-center gap-3">
+        <span x-show="result" x-cloak class="text-xs" :class="result && result.failed ? 'text-red-500' : 'text-green-600'"
+              x-text="result ? `Wysłano: ${result.sent}, błędy: ${result.failed}` + (result.errors && result.errors.length ? ' (' + result.errors.join('; ') + ')' : '') : ''"></span>
+        <button @click="
+            if (!confirm('Wysłać link WhatsApp do wszystkich osób, które jeszcze go nie dostały?')) return;
+            sending = true; result = null;
+            fetch('/admin/{{ tenant.id }}/onboarding/send-all', {method: 'POST'}).then(r => r.json())
+              .then(d => { result = d; sending = false; if (d.sent > 0) setTimeout(() => location.reload(), 1500); })
+              .catch(() => { sending = false; })"
+            :disabled="sending || !{{ 'true' if template_ready else 'false' }}"
+            title="{% if not template_ready %}Szablon WhatsApp czeka na akceptację Meta{% endif %}"
+            class="bg-green-600 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-700 transition disabled:opacity-40">
+            <span x-text="sending ? 'Wysyłam...' : 'Wyślij link do wszystkich nowych'"></span>
+        </button>
+    </div>
+</div>
+
+<!-- Lista osób -->
+<div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+    <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+            <tr>
+                <th class="px-4 py-3 text-left">Osoba</th>
+                <th class="px-4 py-3 text-left">Segment</th>
+                <th class="px-4 py-3 text-left">Język</th>
+                <th class="px-4 py-3 text-left">Postęp</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+            {% for r in rows %}{% set p = r.p %}{% set pr = r.pr %}
+            <tr class="hover:bg-gray-50" x-data="{ sending: false, res: null }"
+                x-show="(filter === 'all' || filter === '{{ pr.status }}') && (search === '' || '{{ p.employee.first_name }} {{ p.employee.last_name }}'.toLowerCase().includes(search.toLowerCase()))">
+                <td class="px-4 py-3">
+                    <a href="/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}" class="font-medium text-gray-800 hover:text-blue-600">{{ p.employee.first_name }} {{ p.employee.last_name }}</a>
+                    <div class="text-xs text-gray-400">{{ p.employee.phone_whatsapp or "brak numeru" }}</div>
+                </td>
+                <td class="px-4 py-3">
+                    {% if p.segment %}<span class="text-xs bg-gray-100 border border-gray-200 rounded px-2 py-0.5">{{ p.segment.name }}</span>
+                    {% else %}<span class="text-xs text-red-400">brak segmentu</span>{% endif %}
+                </td>
+                <td class="px-4 py-3 text-gray-600">{{ LANG_LABELS.get(p.language, p.language) }}</td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-20 bg-gray-100 rounded-full h-1.5"><div class="h-1.5 rounded-full {% if pr.status == 'done' %}bg-green-500{% else %}bg-blue-500{% endif %}" style="width: {{ pr.pct }}%"></div></div>
+                        <span class="text-xs text-gray-500">{{ pr.acked }}/{{ pr.total }}</span>
+                    </div>
+                </td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center gap-1.5 text-xs font-medium rounded-full px-2.5 py-1 border
+                        {% if pr.status == 'done' %}bg-green-50 text-green-700 border-green-200
+                        {% elif pr.status == 'progress' %}bg-blue-50 text-blue-700 border-blue-200
+                        {% elif pr.status == 'sent' %}bg-gray-50 text-gray-600 border-gray-200
+                        {% else %}bg-amber-50 text-amber-700 border-amber-200{% endif %}">{{ pr.label }}</span>
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <div class="flex justify-end items-center gap-3">
+                        <span x-show="res" x-cloak class="text-xs" :class="res && res.status === 'sent' ? 'text-green-600' : 'text-red-500'" x-text="res ? (res.status === 'sent' ? 'Wysłano' : res.error) : ''"></span>
+                        <button @click="sending = true; res = null;
+                                fetch('/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}/send', {method: 'POST'}).then(r => r.json())
+                                  .then(d => { res = d; sending = false; if (d.status === 'sent') setTimeout(() => location.reload(), 1200); })
+                                  .catch(() => { sending = false; })"
+                                :disabled="sending || !{{ 'true' if template_ready else 'false' }}"
+                                class="text-xs text-green-600 hover:text-green-800 disabled:opacity-40"
+                                title="{% if not template_ready %}Szablon WhatsApp czeka na akceptację Meta{% endif %}">
+                            <span x-text="sending ? '...' : '{% if p.link_sent_at %}Wyślij ponownie{% else %}Wyślij link{% endif %}'"></span>
+                        </button>
+                        <a href="/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}" class="text-xs text-blue-500 hover:text-blue-700">Szczegóły</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if not rows %}
+    <div class="px-4 py-8 text-center text-gray-400 text-sm">Nikt jeszcze nie został dodany do onboardingu.</div>
+    {% endif %}
+</div>
+
+</div>
+{% endblock %}

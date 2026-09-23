@@ -1,0 +1,30 @@
+{% extends "onboarding/emp_base.html" %}
+{% block content %}
+<div class="bg-white border border-gray-200 rounded-2xl p-6 mt-4">
+    <h1 class="text-2xl font-bold leading-tight">{{ t('login_title', brand=brand) }}</h1>
+    <p class="text-sm text-gray-500 mt-2">{{ t('login_intro') }}</p>
+
+    {% if error == '1' %}
+    <div class="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{{ t('login_error') }}</div>
+    {% elif error == '2' %}
+    <div class="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">{{ t('login_no_segment') }}</div>
+    {% endif %}
+
+    <form method="post" action="/o/{{ slug }}/login" class="mt-6 space-y-4">
+        <div>
+            <label for="ob-phone" class="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">{{ t('phone_label') }}</label>
+            <input id="ob-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ prefill }}" required
+                   placeholder="{{ t('phone_placeholder') }}"
+                   class="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[var(--brand)]">
+        </div>
+        <div>
+            <label for="ob-code" class="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">{{ t('code_label') }}</label>
+            <input id="ob-code" name="code" type="text" inputmode="numeric" autocomplete="off" required maxlength="6"
+                   placeholder="{{ t('code_placeholder') }}"
+                   class="w-full border border-gray-300 rounded-xl px-4 py-3 text-base tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--brand)]">
+            <div class="text-xs text-gray-400 mt-1">{{ t('code_hint') }}</div>
+        </div>
+        <button type="submit" class="btn-brand w-full rounded-xl py-3 text-base font-semibold">{{ t('login_button') }}</button>
+    </form>
+</div>
+{% endblock %}

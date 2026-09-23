@@ -1,0 +1,85 @@
+{% extends "admin/base.html" %}
+{% block title %}Segmenty i treści - {{ tenant.name }}{% endblock %}
+{% block content %}
+{% set page_title = "Segmenty i treści" %}
+{% set active = "segments" %}
+{% include "onboarding/_admin_nav.html" %}
+
+{% if is_staff and not settings.editor_enabled %}
+<div class="mb-6 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-xl px-4 py-2">
+    Tryb Scaling Labs. Edytor treści nie jest widoczny dla klienta (pakiet Podstawowy).
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+<div class="lg:col-span-2 space-y-4">
+    <div class="bg-white border border-gray-200 rounded-xl p-5" x-data="{ open: false }">
+        <button @click="open = !open" class="text-sm font-medium text-blue-600 hover:underline">+ Dodaj segment</button>
+        <form x-show="open" x-cloak method="post" action="/admin/{{ tenant.id }}/onboarding/segments" class="mt-4 grid grid-cols-1 gap-3">
+            <input name="name" placeholder="Nazwa segmentu, np. Automotive 1 *" required class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <input name="description" placeholder="Opis dla Was (nie widoczny dla pracownika)" class="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+            <div><button type="submit" class="bg-blue-600 text-white rounded-lg px-5 py-2 text-sm font-medium hover:bg-blue-700">Dodaj</button></div>
+        </form>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                <tr><th class="px-4 py-3 text-left">Segment</th><th class="px-4 py-3 text-left">Moduły</th><th class="px-4 py-3 text-left">Osoby</th><th class="px-4 py-3 text-left">Status</th><th></th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for s in segments %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        <a href="/admin/{{ tenant.id }}/onboarding/segments/{{ s.id }}" class="font-medium text-gray-800 hover:text-blue-600">{{ s.name }}</a>
+                        {% if s.description %}<div class="text-xs text-gray-400">{{ s.description }}</div>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-gray-600">{{ s.modules|selectattr('is_active')|list|length }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ counts.get(s.id, 0) }}</td>
+                    <td class="px-4 py-3">{% if s.is_active %}<span class="text-xs text-green-600">aktywny</span>{% else %}<span class="text-xs text-gray-400">wyłączony</span>{% endif %}</td>
+                    <td class="px-4 py-3 text-right"><a href="/admin/{{ tenant.id }}/onboarding/segments/{{ s.id }}" class="text-xs text-blue-500 hover:text-blue-700">Edytuj treści</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not segments %}<div class="px-4 py-8 text-center text-gray-400 text-sm">Brak segmentów. Dodaj pierwszy powyżej.</div>{% endif %}
+    </div>
+    <div class="text-xs text-gray-400">Pakiet Podstawowy obejmuje do 10 segmentów. Obecnie: {{ segments|length }}.</div>
+</div>
+
+<div class="bg-white border border-gray-200 rounded-xl p-5 h-fit">
+    <div class="font-semibold text-gray-800 mb-3">Wygląd strony pracownika</div>
+    <form method="post" action="/admin/{{ tenant.id }}/onboarding/settings" enctype="multipart/form-data" class="space-y-3 text-sm">
+        <div>
+            <label class="text-xs text-gray-500">Nazwa (w nagłówku i powitaniu)</label>
+            <input name="brand_name" value="{{ settings.brand_name or tenant.name }}" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
+            <label class="text-xs text-gray-500">Kolor główny</label>
+            <div class="flex items-center gap-2">
+                <input type="color" name="brand_color" value="{{ settings.brand_color }}" class="h-9 w-14 border border-gray-300 rounded">
+                <span class="text-xs text-gray-500 font-mono">{{ settings.brand_color }}</span>
+            </div>
+        </div>
+        <div>
+            <label class="text-xs text-gray-500">Logo (PNG/JPG/SVG, do 2 MB)</label>
+            {% if settings.logo_data %}
+            <div class="flex items-center gap-3 mb-2">
+                <img src="/o/{{ tenant.slug }}/logo" alt="logo" class="h-8 border border-gray-200 rounded p-1 bg-white">
+                <label class="text-xs text-gray-500 flex items-center gap-1"><input type="checkbox" name="remove_logo"> usuń</label>
+            </div>
+            {% endif %}
+            <input type="file" name="logo" accept="image/*" class="text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700">
+        </div>
+        <div>
+            <label class="text-xs text-gray-500">Tekst powitalny na ekranie startowym (opcjonalnie)</label>
+            <textarea name="welcome_text" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Domyślnie: Przejdź wszystkie moduły przed pierwszym dniem pracy...">{{ settings.welcome_text or '' }}</textarea>
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">Zapisz</button>
+        <div class="text-xs text-gray-400">Podgląd: <a href="/o/{{ tenant.slug }}" target="_blank" class="text-blue-500 hover:underline">/o/{{ tenant.slug }}</a></div>
+    </form>
+</div>
+
+</div>
+{% endblock %}

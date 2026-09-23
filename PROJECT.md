@@ -157,3 +157,29 @@ BASE_URL                  — publiczny URL aplikacji (np. https://hr-flow.railw
 - [ ] Instrukcja wideo "grafik w 60 sekund" dla pracowników
 - [ ] PDF z grafikiem do druku
 - [ ] Powiadomienie do admina gdy pracownik wypełni grafik
+
+---
+
+## Moduł Onboarding (wrzesień 2026, Find Work, Pakiet Podstawowy)
+
+Cyfrowy onboarding pracowników: link WhatsApp → strona pracownika (logowanie telefon + dzień i miesiąc urodzenia) →
+moduły per segment (tekst, zdjęcia, PDF) → potwierdzenie „Zapoznałem się i rozumiem" → rejestr w panelu.
+
+**Kod (osobno od reszty HR-Flow):**
+- `app/models_onboarding.py` — tabele `onboarding_*` (settings, segments, modules, module_translations, attachments,
+  persons, acks, logins, messages). Pliki trzymane w Postgresie (bytea), do 8 MB/plik. FK do `employees` z `ON DELETE CASCADE`.
+- `app/api/onboarding.py` — router: `/admin/{tenant_id}/onboarding/...` (panel) i `/o/{slug}/...` (pracownik).
+- `app/services/onboarding_i18n.py` — teksty UI w 5 językach (pl, en, uk, es, ru); `READY_LANGS` steruje przełącznikiem.
+- `app/templates/onboarding/` — szablony panelu (`admin_*.html`) i pracownika (`emp_*.html`).
+- Zmiany w istniejących plikach: `app/main.py` (2 linie, rejestracja routera) i `admin/base.html` (1 link w menu).
+
+**Edytor treści** (segmenty, moduły, pliki, tłumaczenia, wygląd) jest ukryty przed klientem w Pakiecie Podstawowym.
+Odblokowanie dla Scaling Labs: `/admin/{tenant_id}/onboarding/staff?key=<ONBOARDING_STAFF_KEY>` (sesja).
+Pakiet Rozszerzony = `onboarding_settings.editor_enabled = true`.
+
+**Zmienne środowiskowe (nowe):** `ONBOARDING_STAFF_KEY` (klucz edytora), `ONBOARDING_TEMPLATE_SID` (Twilio Content
+Template po akceptacji Meta; zmienne szablonu: {{1}} imię, {{2}} link, {{3}} nazwa firmy). Bez SID wysyłka zwraca
+czytelny błąd, a link można skopiować z panelu.
+
+**Dane demo lokalnie:** `seed_onboarding_demo.py` (4 segmenty z oferty, 4 osoby). Nie uruchamiać na produkcji.
+**Środowisko lokalne:** `.venv` (Python 3.11), Postgres 16 z Homebrew na porcie 5433 (`~/hr-flow-dev/pgdata`), `.env`.
