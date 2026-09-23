@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ brand }}{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root { --brand: {{ color }}; }
+        .btn-brand { background: var(--brand); color: #fff; }
+        .btn-brand:hover { filter: brightness(1.08); }
+        .text-brand { color: var(--brand); }
+        .border-brand { border-color: var(--brand); }
+        .bg-brand-soft { background: color-mix(in srgb, var(--brand) 10%, white); }
+        .ob-body p { margin-bottom: .9rem; line-height: 1.65; }
+        .ob-body ul.ob-list { list-style: disc; padding-left: 1.4rem; margin-bottom: .9rem; line-height: 1.6; }
+        .ob-body ul.ob-list li { margin-bottom: .25rem; }
+        .ob-body h3.ob-h3 { font-weight: 600; font-size: 1.05rem; margin: 1.25rem 0 .5rem; color: #111827; }
+        .ob-body > :first-child { margin-top: 0; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+<header class="bg-white border-b border-gray-200">
+    <div class="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+        <a href="/o/{{ slug }}{% if person is defined and person %}/start{% endif %}" class="flex items-center gap-2 min-w-0">
+            {% if has_logo %}
+            <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="h-7 w-auto">
+            {% else %}
+            <span class="inline-block w-6 h-6 rounded-md" style="background: var(--brand)"></span>
+            <span class="font-semibold text-sm tracking-wide truncate">{{ brand }}</span>
+            {% endif %}
+        </a>
+        <div class="flex items-center gap-1 shrink-0">
+            {% if ready_langs|length > 1 %}
+            {% for l in ready_langs %}
+            <a href="/o/{{ slug }}/lang/{{ l }}"
+               class="text-[11px] font-medium px-2 py-1 rounded-full border {% if l == lang %}btn-brand border-transparent{% else %}border-gray-300 text-gray-500 hover:bg-gray-100{% endif %}">{{ LANG_LABELS[l] }}</a>
+            {% endfor %}
+            {% endif %}
+            {% if person is defined and person %}
+            <form method="post" action="/o/{{ slug }}/logout" class="ml-2">
+                <button class="text-[11px] text-gray-400 hover:text-gray-700">{{ t('logout') }}</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</header>
+
+<main class="max-w-xl mx-auto px-4 py-6">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="max-w-xl mx-auto px-4 py-6 text-center text-[11px] text-gray-400">
+    {{ brand }}
+</footer>
+</body>
+</html>

@@ -1,0 +1,149 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ p.employee.first_name }} {{ p.employee.last_name }} - onboarding{% endblock %}
+{% block content %}
+{% set page_title = p.employee.first_name ~ " " ~ p.employee.last_name %}
+{% set active = "persons" %}
+{% set can_edit = False %}
+{% include "onboarding/_admin_nav.html" %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+<!-- Lewa kolumna: status + rejestr -->
+<div class="lg:col-span-2 space-y-6">
+
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <div class="text-sm text-gray-500">Status</div>
+                <div class="text-lg font-semibold
+                    {% if pr.status == 'done' %}text-green-600{% elif pr.status == 'progress' %}text-blue-600{% else %}text-gray-700{% endif %}">{{ pr.label }}</div>
+                <div class="text-sm text-gray-500 mt-1">Moduły potwierdzone: {{ pr.acked }} z {{ pr.total }}</div>
+            </div>
+            <div class="text-right text-xs text-gray-500 space-y-1">
+                <div>Pierwsze logowanie: <span class="text-gray-800">{{ p.first_login_at|ob_dt or "jeszcze nie" }}</span></div>
+                <div>Ostatnie logowanie: <span class="text-gray-800">{{ p.last_login_at|ob_dt or "-" }}</span></div>
+                <div>Link wysłany: <span class="text-gray-800">{{ p.link_sent_at|ob_dt or "nie" }}{% if p.link_sent_count > 1 %} ({{ p.link_sent_count }} razy){% endif %}</span></div>
+                <div>Ukończony: <span class="text-gray-800">{{ p.completed_at|ob_dt or "-" }}</span></div>
+            </div>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-2 mt-4"><div class="h-2 rounded-full {% if pr.status == 'done' %}bg-green-500{% else %}bg-blue-500{% endif %}" style="width: {{ pr.pct }}%"></div></div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <div class="font-semibold text-gray-800">Rejestr zapoznania</div>
+            <div class="text-xs text-gray-400">{% if p.segment %}{{ p.segment.name }}{% else %}brak segmentu{% endif %}</div>
+        </div>
+        <table class="w-full text-sm">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
+                <tr><th class="px-5 py-2 text-left">Moduł</th><th class="px-5 py-2 text-left">Potwierdzenie</th><th class="px-5 py-2 text-left">Język</th></tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+                {% for r in register %}
+                <tr>
+                    <td class="px-5 py-3 text-gray-800">{{ loop.index }}. {{ r.m.title }}</td>
+                    <td class="px-5 py-3">{% if r.ack %}<span class="text-green-600 font-medium">{{ r.ack.acked_at|ob_dt }}</span>{% else %}<span class="text-gray-400">-</span>{% endif %}</td>
+                    <td class="px-5 py-3 text-gray-500">{% if r.ack %}{{ LANG_LABELS.get(r.ack.language, r.ack.language) }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% if not register %}<div class="px-5 py-6 text-sm text-gray-400 text-center">Segment nie ma jeszcze modułów.</div>{% endif %}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+            <div class="font-semibold text-gray-800 mb-2">Logowania</div>
+            {% if p.logins %}
+            <ul class="text-sm text-gray-600 space-y-1 max-h-48 overflow-auto">
+                {% for l in p.logins|reverse %}<li>{{ l.logged_at|ob_dt }}</li>{% endfor %}
+            </ul>
+            {% else %}<div class="text-sm text-gray-400">Brak logowań.</div>{% endif %}
+        </div>
+        <div class="bg-white border border-gray-200 rounded-xl p-5">
+            <div class="font-semibold text-gray-800 mb-2">Wysyłki WhatsApp</div>
+            {% if p.messages %}
+            <ul class="text-sm space-y-1 max-h-48 overflow-auto">
+                {% for m in p.messages|reverse %}
+                <li class="{% if m.status == 'sent' %}text-gray-600{% else %}text-red-500{% endif %}">{{ m.sent_at|ob_dt }} - {{ 'wysłano' if m.status == 'sent' else m.status }}{% if m.error_message %}: {{ m.error_message }}{% endif %}</li>
+                {% endfor %}
+            </ul>
+            {% else %}<div class="text-sm text-gray-400">Jeszcze nie wysłano.</div>{% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Prawa kolumna: dane + akcje -->
+<div class="space-y-6">
+    <div class="bg-white border border-gray-200 rounded-xl p-5" x-data="{ sending: false, res: null }">
+        <div class="font-semibold text-gray-800 mb-3">Akcje</div>
+        <div class="space-y-2">
+            <button @click="sending = true; res = null;
+                    fetch('/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}/send', {method: 'POST'}).then(r => r.json())
+                      .then(d => { res = d; sending = false; if (d.status === 'sent') setTimeout(() => location.reload(), 1200); })"
+                    :disabled="sending || !{{ 'true' if template_ready else 'false' }}"
+                    class="w-full bg-green-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-green-700 disabled:opacity-40">
+                <span x-text="sending ? 'Wysyłam...' : '{% if p.link_sent_at %}Wyślij link ponownie{% else %}Wyślij link WhatsApp{% endif %}'"></span>
+            </button>
+            {% if not template_ready %}<div class="text-xs text-amber-600">Szablon WhatsApp czeka na akceptację Meta. Do tego czasu link można skopiować i wysłać ręcznie.</div>{% endif %}
+            <div x-show="res" x-cloak class="text-xs" :class="res && res.status === 'sent' ? 'text-green-600' : 'text-red-500'" x-text="res ? (res.status === 'sent' ? 'Wysłano.' : res.error) : ''"></div>
+            <button onclick="navigator.clipboard.writeText('{{ login_url }}'); this.innerText = 'Skopiowano'" class="w-full border border-gray-300 text-gray-700 rounded-lg px-4 py-2 text-sm hover:bg-gray-50">Skopiuj link do onboardingu</button>
+            <form method="post" action="/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}/preview" target="_blank">
+                <button type="submit" class="w-full border border-blue-200 text-blue-600 rounded-lg px-4 py-2 text-sm hover:bg-blue-50">Podgląd jako pracownik</button>
+            </form>
+        </div>
+        <div class="mt-4 text-xs text-gray-500 bg-gray-50 rounded-lg p-3">
+            Login: <span class="text-gray-800">{{ p.employee.phone_whatsapp or "brak numeru" }}</span><br>
+            Kod: <span class="text-gray-800 font-mono">{{ p.login_code }}</span> (dzień i miesiąc urodzenia)
+        </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl p-5">
+        <div class="font-semibold text-gray-800 mb-3">Dane</div>
+        <form method="post" action="/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}/edit" class="space-y-3 text-sm">
+            <div>
+                <label class="text-xs text-gray-500">Telefon WhatsApp</label>
+                <input name="phone_whatsapp" value="{{ p.employee.phone_whatsapp or '' }}" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <label class="text-xs text-gray-500">Dzień urodzenia</label>
+                    <select name="birth_day" class="w-full border border-gray-300 rounded-lg px-2 py-2">
+                        {% for d in range(1, 32) %}<option value="{{ d }}" {% if d == p.birth_day %}selected{% endif %}>{{ d }}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="flex-1">
+                    <label class="text-xs text-gray-500">Miesiąc</label>
+                    <select name="birth_month" class="w-full border border-gray-300 rounded-lg px-2 py-2">
+                        {% for m in range(1, 13) %}<option value="{{ m }}" {% if m == p.birth_month %}selected{% endif %}>{{ MONTHS_PL[m-1] }}</option>{% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Segment</label>
+                <select name="segment_id" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    <option value="">-- brak --</option>
+                    {% for s in segments %}<option value="{{ s.id }}" {% if s.id == p.segment_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Język</label>
+                <select name="language" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+                    {% for l in SUPPORTED_LANGS %}<option value="{{ l }}" {% if l == p.language %}selected{% endif %}>{{ LANG_LABELS[l] }} - {{ LANG_NAMES[l] }}</option>{% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500">Pierwszy dzień (godzina, miejsce, koordynator)</label>
+                <textarea name="first_day_info" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2">{{ p.first_day_info or '' }}</textarea>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white rounded-lg px-4 py-2 font-medium hover:bg-blue-700">Zapisz</button>
+        </form>
+        <form method="post" action="/admin/{{ tenant.id }}/onboarding/persons/{{ p.id }}/delete" class="mt-3"
+              onsubmit="return confirm('Usunąć tę osobę z onboardingu? Pracownik zostaje na liście HR-Flow, znika tylko rejestr onboardingu.')">
+            <button type="submit" class="w-full text-red-400 hover:text-red-600 text-xs">Usuń z onboardingu</button>
+        </form>
+    </div>
+</div>
+
+</div>
+{% endblock %}

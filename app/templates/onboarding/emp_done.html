@@ -1,0 +1,29 @@
+{% extends "onboarding/emp_base.html" %}
+{% block content %}
+<div class="text-center mt-6">
+    <div class="w-16 h-16 mx-auto rounded-full bg-green-50 border border-green-300 text-green-600 text-3xl font-bold flex items-center justify-center">&#10003;</div>
+    <h1 class="text-2xl font-bold mt-4">{{ t('done_title') }}</h1>
+    <p class="text-sm text-gray-500 mt-1">{{ t('done_intro') }}</p>
+</div>
+
+<div class="mt-6 bg-white border border-gray-200 rounded-2xl p-5 space-y-2">
+    {% for it in items %}
+    <div class="flex items-start gap-3 text-sm">
+        <span class="w-5 h-5 rounded-md bg-green-500 text-white text-xs flex items-center justify-center shrink-0 mt-0.5">&#10003;</span>
+        <div class="min-w-0">
+            <div class="font-medium truncate">{{ it.title }}</div>
+            <div class="text-[11px] text-gray-400">{{ it.ack.acked_at|ob_dt }}</div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if person.first_day_info %}
+<div class="mt-4 bg-brand-soft border border-brand rounded-2xl p-5">
+    <div class="text-[11px] uppercase tracking-wider text-brand font-semibold">{{ t('done_first_day') }}</div>
+    <div class="ob-body text-sm mt-2">{{ person.first_day_info|ob_body }}</div>
+</div>
+{% endif %}
+
+<a href="/o/{{ slug }}/start" class="mt-6 block text-center border border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:bg-gray-100">{{ t('done_back') }}</a>
+{% endblock %}

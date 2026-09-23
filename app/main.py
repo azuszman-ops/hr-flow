@@ -25,6 +25,8 @@ app.add_middleware(
 )
 
 app.include_router(router)
+from app.api.onboarding import router as onboarding_router  # moduł Onboarding (Find Work, 09.2026)
+app.include_router(onboarding_router)
 
 
 @app.exception_handler(NeedsLogin)

@@ -1,0 +1,53 @@
+{% extends "onboarding/emp_base.html" %}
+{% block content %}
+<div class="mt-2">
+    <h1 class="text-2xl font-bold leading-tight">{{ t('start_title') }}</h1>
+    <p class="text-sm text-gray-500 mt-1">{{ person.employee.first_name }} {{ person.employee.last_name }}{% if person.segment %} · {{ person.segment.name }}{% endif %}</p>
+</div>
+
+{% if locked_msg %}
+<div class="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">{{ t('locked_message') }}</div>
+{% endif %}
+
+<div class="mt-5 bg-white border border-gray-200 rounded-2xl p-5">
+    <div class="font-semibold">
+        {% if items|length == 1 %}{{ t('modules_count_1') }}{% else %}{{ t('modules_count', n=items|length) }}{% endif %}
+        {% if total_min %} · {{ t('about_minutes', n=total_min) }}{% endif %}
+    </div>
+    <p class="text-sm text-gray-500 mt-1">{{ settings.welcome_text or t('start_intro') }}</p>
+</div>
+
+<div class="mt-4 space-y-2">
+    {% for it in items %}
+    {% set clickable = it.state != 'locked' %}
+    <a {% if clickable %}href="/o/{{ slug }}/m/{{ it.m.id }}"{% endif %}
+       class="flex items-center gap-3 bg-white border rounded-2xl px-4 py-3.5
+              {% if it.state == 'now' %}border-brand bg-brand-soft{% elif it.state == 'done' %}border-gray-200{% else %}border-gray-200 opacity-60{% endif %}
+              {% if clickable %}hover:shadow-sm{% endif %}">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0
+                    {% if it.state == 'done' %}bg-green-500 text-white{% elif it.state == 'now' %}btn-brand{% else %}border border-gray-300 text-gray-400{% endif %}">
+            {% if it.state == 'done' %}&#10003;{% else %}{{ it.i }}{% endif %}
+        </div>
+        <div class="min-w-0 flex-1">
+            <div class="font-medium text-sm truncate">{{ it.title }}</div>
+            <div class="text-[11px] text-gray-400">
+                {% if it.state == 'done' %}{{ t('acked_at', when=it.ack.acked_at|ob_dt) }}
+                {% elif it.state == 'now' %}{{ t('module_now') }}{% if it.m.estimated_minutes %} · {{ it.m.estimated_minutes }} {{ t('minutes_short') }}{% endif %}
+                {% else %}{{ t('module_locked') }}{% endif %}
+            </div>
+        </div>
+        {% if clickable %}<span class="text-gray-300">›</span>{% endif %}
+    </a>
+    {% endfor %}
+</div>
+
+<div class="mt-6">
+    {% if done %}
+    <a href="/o/{{ slug }}/done" class="btn-brand block text-center rounded-xl py-3 text-base font-semibold">{{ t('done_button') }}</a>
+    {% elif next_item %}
+    <a href="/o/{{ slug }}/m/{{ next_item.m.id }}" class="btn-brand block text-center rounded-xl py-3 text-base font-semibold">
+        {% if next_item.i == 1 %}{{ t('start_button') }}{% else %}{{ t('continue_button') }}{% endif %}
+    </a>
+    {% endif %}
+</div>
+{% endblock %}

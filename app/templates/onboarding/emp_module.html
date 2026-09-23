@@ -1,0 +1,53 @@
+{% extends "onboarding/emp_base.html" %}
+{% block title %}{{ item.title }} - {{ brand }}{% endblock %}
+{% block content %}
+<!-- Pasek postępu -->
+<div class="flex gap-1 mt-1">
+    {% for it in items %}
+    <div class="flex-1 h-1.5 rounded-full {% if it.state == 'done' %}bg-green-500{% elif it.m.id == item.m.id %}bg-[var(--brand)]{% else %}bg-gray-200{% endif %}"></div>
+    {% endfor %}
+</div>
+<div class="text-[11px] uppercase tracking-wider text-gray-400 mt-2">{{ t('module_of', i=item.i, n=n) }}</div>
+
+<h1 class="text-2xl font-bold leading-tight mt-1">{{ item.title }}</h1>
+
+<div class="mt-4 bg-white border border-gray-200 rounded-2xl p-5">
+    <div class="ob-body text-[15px] text-gray-700">
+    {% for part in parts %}
+        {% if part.type == 'html' %}{{ part.html }}
+        {% elif part.att.is_image %}
+        <figure class="my-4">
+            <img src="/o/{{ slug }}/file/{{ part.att.id }}" alt="{{ part.att.caption or part.att.filename }}" class="w-full rounded-xl border border-gray-200">
+            {% if part.att.caption %}<figcaption class="text-xs text-gray-400 mt-1.5 leading-snug">{{ part.att.caption }}</figcaption>{% endif %}
+        </figure>
+        {% elif part.att.is_pdf %}
+        <a href="/o/{{ slug }}/file/{{ part.att.id }}" target="_blank"
+           class="my-4 flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3 hover:bg-gray-50">
+            <span class="text-xs font-bold text-white bg-red-500 rounded px-1.5 py-0.5">PDF</span>
+            <span class="text-sm font-medium truncate flex-1">{{ part.att.caption or part.att.filename }}</span>
+            <span class="text-xs text-brand">{{ t('open_pdf') }} ›</span>
+        </a>
+        {% endif %}
+    {% endfor %}
+    </div>
+</div>
+
+<div class="mt-5">
+    {% if item.ack %}
+    <div class="bg-green-50 border border-green-200 text-green-700 rounded-xl px-4 py-3 text-sm flex items-center gap-2">
+        <span class="w-5 h-5 rounded-full bg-green-500 text-white text-xs flex items-center justify-center">&#10003;</span>
+        {{ t('acked_at', when=item.ack.acked_at|ob_dt) }}
+    </div>
+    <div class="mt-3 flex gap-2">
+        <a href="/o/{{ slug }}/start" class="flex-1 text-center border border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:bg-gray-100">{{ t('back_to_list') }}</a>
+        {% if nxt %}<a href="/o/{{ slug }}/m/{{ nxt.m.id }}" class="btn-brand flex-1 text-center rounded-xl py-3 text-sm font-semibold">{{ t('next_module') }} ›</a>{% endif %}
+    </div>
+    {% else %}
+    <form method="post" action="/o/{{ slug }}/m/{{ item.m.id }}/ack">
+        <button type="submit" class="btn-brand w-full rounded-xl py-3.5 text-base font-semibold">{{ t('ack_button') }}</button>
+    </form>
+    <div class="text-center text-[11px] text-gray-400 mt-2">{{ t('ack_note') }}</div>
+    <a href="/o/{{ slug }}/start" class="block text-center text-xs text-gray-400 hover:text-gray-600 mt-3">{{ t('back_to_list') }}</a>
+    {% endif %}
+</div>
+{% endblock %}
