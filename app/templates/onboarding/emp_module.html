@@ -12,23 +12,24 @@
 <h1 class="text-2xl font-bold leading-tight mt-1">{{ item.title }}</h1>
 
 <div class="mt-4 bg-white border border-gray-200 rounded-2xl p-5">
-    <div class="ob-body text-[15px] text-gray-700">{{ item.body|ob_body }}</div>
-
-    {% for a in item.m.attachments %}
-    {% if a.is_image %}
-    <figure class="mt-4">
-        <img src="/o/{{ slug }}/file/{{ a.id }}" alt="{{ a.caption or a.filename }}" class="w-full rounded-xl border border-gray-200">
-        {% if a.caption %}<figcaption class="text-xs text-gray-400 mt-1">{{ a.caption }}</figcaption>{% endif %}
-    </figure>
-    {% elif a.is_pdf %}
-    <a href="/o/{{ slug }}/file/{{ a.id }}" target="_blank"
-       class="mt-4 flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3 hover:bg-gray-50">
-        <span class="text-xs font-bold text-white bg-red-500 rounded px-1.5 py-0.5">PDF</span>
-        <span class="text-sm font-medium truncate flex-1">{{ a.caption or a.filename }}</span>
-        <span class="text-xs text-brand">{{ t('open_pdf') }} ›</span>
-    </a>
-    {% endif %}
+    <div class="ob-body text-[15px] text-gray-700">
+    {% for part in parts %}
+        {% if part.type == 'html' %}{{ part.html }}
+        {% elif part.att.is_image %}
+        <figure class="my-4">
+            <img src="/o/{{ slug }}/file/{{ part.att.id }}" alt="{{ part.att.caption or part.att.filename }}" class="w-full rounded-xl border border-gray-200">
+            {% if part.att.caption %}<figcaption class="text-xs text-gray-400 mt-1.5 leading-snug">{{ part.att.caption }}</figcaption>{% endif %}
+        </figure>
+        {% elif part.att.is_pdf %}
+        <a href="/o/{{ slug }}/file/{{ part.att.id }}" target="_blank"
+           class="my-4 flex items-center gap-3 border border-gray-200 rounded-xl px-4 py-3 hover:bg-gray-50">
+            <span class="text-xs font-bold text-white bg-red-500 rounded px-1.5 py-0.5">PDF</span>
+            <span class="text-sm font-medium truncate flex-1">{{ part.att.caption or part.att.filename }}</span>
+            <span class="text-xs text-brand">{{ t('open_pdf') }} ›</span>
+        </a>
+        {% endif %}
     {% endfor %}
+    </div>
 </div>
 
 <div class="mt-5">

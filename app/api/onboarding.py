@@ -55,19 +55,49 @@ def fmt_dt(value: datetime | None, with_time: bool = True) -> str:
     return local.strftime("%d.%m.%Y, %H:%M") if with_time else local.strftime("%d.%m.%Y")
 
 
+FILE_MARKER = re.compile(r"^\[(?:plik|zdjęcie|zdjecie|file)\s+(\d+)\]$", re.IGNORECASE)
+
+
+def _block_html(block: str) -> str:
+    lines = [ln.rstrip() for ln in block.split("\n") if ln.strip()]
+    if not lines:
+        return ""
+    if all(ln.lstrip().startswith("- ") for ln in lines):
+        items = "".join(f"<li>{escape(ln.lstrip()[2:])}</li>" for ln in lines)
+        return f"<ul class='ob-list'>{items}</ul>"
+    # Pojedyncza krótka linia bez kropki na końcu = śródtytuł
+    if len(lines) == 1 and len(lines[0]) <= 60 and not lines[0].rstrip()[-1:] in ".?!:;,":
+        return f"<h3 class='ob-h3'>{escape(lines[0])}</h3>"
+    return f"<p>{'<br>'.join(str(escape(ln)) for ln in lines)}</p>"
+
+
+def render_parts(text: str, attachments: list | None = None) -> list[dict]:
+    """Prosty tekst -> lista części do szablonu.
+    Akapity po pustej linii, linie „- " jako lista, krótka linia bez kropki jako śródtytuł,
+    „[plik 2]" w osobnej linii wstawia drugi załącznik w tym miejscu. Nieużyte załączniki idą na koniec.
+    """
+    attachments = list(attachments or [])
+    used, parts = set(), []
+    for block in re.split(r"\n\s*\n", (text or "").strip()):
+        m = FILE_MARKER.match(block.strip())
+        if m:
+            idx = int(m.group(1)) - 1
+            if 0 <= idx < len(attachments):
+                parts.append({"type": "file", "att": attachments[idx]})
+                used.add(idx)
+            continue
+        html = _block_html(block)
+        if html:
+            parts.append({"type": "html", "html": Markup(html)})
+    for i, att in enumerate(attachments):
+        if i not in used:
+            parts.append({"type": "file", "att": att})
+    return parts
+
+
 def render_body(text: str) -> Markup:
-    """Prosty tekst -> HTML: akapity po pustej linii, linie „- " jako lista. Wszystko escapowane."""
-    if not text:
-        return Markup("")
-    out = []
-    for block in re.split(r"\n\s*\n", text.strip()):
-        lines = [ln.rstrip() for ln in block.split("\n") if ln.strip()]
-        if lines and all(ln.lstrip().startswith("- ") for ln in lines):
-            items = "".join(f"<li>{escape(ln.lstrip()[2:])}</li>" for ln in lines)
-            out.append(f"<ul class='ob-list'>{items}</ul>")
-        else:
-            out.append(f"<p>{'<br>'.join(str(escape(ln)) for ln in lines)}</p>")
-    return Markup("".join(out))
+    """Prosty tekst -> HTML (bez załączników). Wszystko escapowane."""
+    return Markup("".join(str(p["html"]) for p in render_parts(text) if p["type"] == "html"))
 
 
 templates.env.filters["ob_body"] = render_body
@@ -201,10 +231,8 @@ async def send_link(db: AsyncSession, tenant: Tenant, person: OnboardingPerson, 
     if not TEMPLATE_ONBOARDING:
         return {"status": "failed", "error": "Szablon WhatsApp nie jest jeszcze skonfigurowany (ONBOARDING_TEMPLATE_SID)."}
     link = build_login_link(tenant.slug, emp.token)
-    result = await send_whatsapp(
-        emp.phone_whatsapp, TEMPLATE_ONBOARDING,
-        {"1": emp.first_name, "2": link, "3": settings.brand_name or tenant.name},
-    )
+    # Szablon Meta: {{1}} imię, {{2}} link (nazwa firmy wpisana na stałe w treści szablonu)
+    result = await send_whatsapp(emp.phone_whatsapp, TEMPLATE_ONBOARDING, {"1": emp.first_name, "2": link})
     db.add(OnboardingMessage(
         person_id=person.id, phone=emp.phone_whatsapp, status=result["status"],
         external_id=result.get("external_id"), error_message=result.get("error"),
@@ -829,8 +857,9 @@ async def ob_emp_module(request: Request, slug: str, module_id: int, db: AsyncSe
     if item["state"] == "locked":
         return RedirectResponse(f"/o/{slug}/start?locked=1", status_code=303)
     nxt = next((it for it in items if it["i"] == item["i"] + 1), None)
+    parts = render_parts(item["body"], [a for a in item["m"].attachments if a.is_image or a.is_pdf])
     return templates.TemplateResponse("onboarding/emp_module.html", _emp_ctx(
-        request, tenant, settings, lang, person=person, items=items, item=item, nxt=nxt, n=len(items),
+        request, tenant, settings, lang, person=person, items=items, item=item, nxt=nxt, n=len(items), parts=parts,
     ))
 
 

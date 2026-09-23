@@ -14,19 +14,44 @@ from app.database import AsyncSessionLocal, init_db
 from app.models import Tenant, Employee
 import app.api.onboarding  # noqa: rejestruje modele onboardingu
 from app.models_onboarding import (
-    OnboardingSettings, OnboardingSegment, OnboardingModule, OnboardingPerson,
+    OnboardingSettings, OnboardingSegment, OnboardingModule, OnboardingPerson, OnboardingAttachment,
+)
+
+import os
+ASSETS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "seed_assets")
+
+# Dłuższy moduł demo (pokazuje przewijanie na telefonie, zdjęcia między akapitami)
+LONG_SAFETY_BODY = (
+    "Na hali obowiązują zasady, które chronią Ciebie i osoby obok. Przeczytaj je uważnie. Na końcu potwierdź, że rozumiesz.\n\n"
+    "Poruszanie się po hali\n\n"
+    "- Chodź tylko wyznaczonymi ciągami komunikacyjnymi, oznaczonymi żółtymi liniami na podłodze.\n"
+    "- Wózki widłowe mają pierwszeństwo. Zatrzymaj się i nawiąż kontakt wzrokowy z operatorem, zanim przejdziesz.\n"
+    "- Nie wchodź do stref oznaczonych czerwoną taśmą ani za barierki maszyn.\n"
+    "- Nie biegaj, nie używaj telefonu w ruchu.\n\n"
+    "[plik 1]\n\n"
+    "Wyłączniki awaryjne\n\n"
+    "Czerwone grzybki STOP są przy każdej maszynie i na słupach co 20 metrów. Wciśnij, gdy widzisz zagrożenie dla siebie "
+    "albo kogoś innego. Nie zastanawiaj się, czy to na pewno konieczne. Fałszywy alarm nie jest karany, brak reakcji może "
+    "kosztować zdrowie.\n\n"
+    "Po wciśnięciu wyłącznika maszynę uruchamia wyłącznie brygadzista albo utrzymanie ruchu. Nie próbuj sam.\n\n"
+    "[plik 2]\n\n"
+    "Hałas i oświetlenie\n\n"
+    "- W strefach oznaczonych piktogramem słuchawek noś ochronniki słuchu. Dostaniesz je od koordynatora.\n"
+    "- Zgłoś przepaloną lampę albo migające światło nad Twoim stanowiskiem.\n\n"
+    "Substancje i materiały\n\n"
+    "- Pojemniki z chemią mają etykiety. Nie przelewaj do innych opakowań.\n"
+    "- Rozlanie: zabezpiecz miejsce, nie sprzątaj sam, wezwij brygadzistę.\n"
+    "- Zużyte rękawice i czyściwo wyrzucaj do oznaczonych pojemników.\n\n"
+    "Wypadek albo sytuacja niebezpieczna\n\n"
+    "- Najpierw zadbaj o bezpieczeństwo, potem wzywaj pomoc.\n"
+    "- Telefon alarmowy: 112. Apteczki są przy wejściach na halę i przy biurze brygadzisty.\n"
+    "- Każde zdarzenie, także drobne skaleczenie, zgłoś koordynatorowi Find Work tego samego dnia.\n\n"
+    "Numer do koordynatora dostaniesz pierwszego dnia. Zapisz go w telefonie."
 )
 
 SEGMENTS = {
     "Automotive 1": [
-        ("Bezpieczeństwo na hali", 5,
-         "Na hali obowiązują zasady, które chronią Ciebie i osoby obok. Przeczytaj je uważnie, na koniec potwierdź.\n\n"
-         "- Poruszaj się tylko wyznaczonymi ciągami komunikacyjnymi (żółte linie).\n"
-         "- Wózki widłowe mają pierwszeństwo. Zatrzymaj się i nawiąż kontakt wzrokowy z operatorem.\n"
-         "- Nie wchodź do stref oznaczonych czerwoną taśmą.\n"
-         "- Wyłączniki awaryjne (czerwone grzybki) są przy każdej maszynie. Użyj ich, gdy widzisz zagrożenie.\n"
-         "- Wypadek albo sytuację niebezpieczną zgłoś natychmiast koordynatorowi.\n\n"
-         "Telefon alarmowy na hali: 112. Koordynator Find Work: numer dostaniesz pierwszego dnia."),
+        ("Bezpieczeństwo na hali", 8, LONG_SAFETY_BODY),
         ("Odzież i obuwie ochronne", 3,
          "Na całej hali obowiązuje obuwie ochronne S3 z podnoskiem. Wydaje je koordynator pierwszego dnia.\n\n"
          "- Kamizelka odblaskowa: zawsze, także w drodze do szatni.\n"
@@ -100,6 +125,35 @@ PERSONS = [
 ]
 
 
+async def refresh_long_module(db, tenant_id: int):
+    """Moduł „Bezpieczeństwo na hali" w Automotive 1: długa treść + 2 ilustracje z seed_assets (idempotentnie)."""
+    seg = (await db.execute(select(OnboardingSegment).where(
+        OnboardingSegment.tenant_id == tenant_id, OnboardingSegment.name == "Automotive 1"))).scalars().first()
+    if not seg:
+        return
+    mod = (await db.execute(select(OnboardingModule).where(
+        OnboardingModule.segment_id == seg.id, OnboardingModule.title == "Bezpieczeństwo na hali"))).scalars().first()
+    if not mod:
+        return
+    mod.body, mod.estimated_minutes = LONG_SAFETY_BODY, 8
+    have = (await db.execute(select(OnboardingAttachment.filename).where(OnboardingAttachment.module_id == mod.id))).scalars().all()
+    for order, (fname, caption) in enumerate([
+        ("hala_demo.png", "Żółte linie wyznaczają ciągi komunikacyjne. Czerwone grzybki STOP przy każdej maszynie."),
+        ("wylacznik_demo.png", "Wyłącznik awaryjny. Wciśnij, gdy widzisz zagrożenie."),
+    ], start=1):
+        if fname in have:
+            continue
+        path = os.path.join(ASSETS, fname)
+        if not os.path.exists(path):
+            print(f"Brak pliku {path}, pomijam")
+            continue
+        with open(path, "rb") as f:
+            data = f.read()
+        db.add(OnboardingAttachment(module_id=mod.id, filename=fname, content_type="image/png",
+                                    size=len(data), data=data, caption=caption, sort_order=order))
+    print("Moduł demo ze zdjęciami odświeżony.")
+
+
 async def main():
     await init_db()
     async with AsyncSessionLocal() as db:
@@ -116,7 +170,8 @@ async def main():
 
         existing = (await db.execute(select(OnboardingSegment).where(OnboardingSegment.tenant_id == tenant.id))).scalars().all()
         if existing:
-            print(f"Segmenty już są ({len(existing)}), pomijam.")
+            print(f"Segmenty już są ({len(existing)}), odświeżam tylko moduł demo ze zdjęciami.")
+            await refresh_long_module(db, tenant.id)
         else:
             seg_by_name = {}
             for i, (name, modules) in enumerate(SEGMENTS.items(), start=1):
@@ -137,6 +192,8 @@ async def main():
                 db.add(OnboardingPerson(tenant_id=tenant.id, employee_id=emp.id, segment_id=seg_by_name[seg_name].id,
                                         language=lang, birth_day=bd, birth_month=bm, first_day_info=info))
             print(f"Dodano {len(PERSONS)} osób (kody: " + ", ".join(f"{p[0]} {p[5]:02d}{p[6]:02d}" for p in PERSONS) + ")")
+            await db.flush()
+            await refresh_long_module(db, tenant.id)
         await db.commit()
         print(f"Panel: /admin/{tenant.id}/onboarding   Strona pracownika: /o/{tenant.slug}")
 
