@@ -3,9 +3,12 @@ Dane demo do modułu Onboarding (LOKALNIE, do prezentacji dla Find Work).
 Tworzy tenant find-work (jeśli brak), 4 segmenty z modułami z oferty i 4 osoby.
 
 Uruchomienie:  set -a; source .env; set +a; .venv/bin/python seed_onboarding_demo.py
-Nie uruchamiać na produkcji bez decyzji Alberta.
+Flaga --bez-osob: tylko segmenty i moduły (na produkcję, bez fikcyjnych pracowników).
+Na produkcji tylko po decyzji Alberta (23.09: segmenty demo TAK, osoby NIE).
 """
 import asyncio
+import sys
+BEZ_OSOB = "--bez-osob" in sys.argv
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -183,7 +186,7 @@ async def main():
                     db.add(OnboardingModule(segment_id=seg.id, title=title, body=body, estimated_minutes=minutes, sort_order=j))
             print(f"Dodano {len(SEGMENTS)} segmentów")
 
-            for first, last, phone, seg_name, lang, bd, bm, info in PERSONS:
+            for first, last, phone, seg_name, lang, bd, bm, info in ([] if BEZ_OSOB else PERSONS):
                 emp = (await db.execute(select(Employee).where(Employee.tenant_id == tenant.id, Employee.phone_whatsapp == phone))).scalars().first()
                 if not emp:
                     emp = Employee(tenant_id=tenant.id, first_name=first, last_name=last, phone_whatsapp=phone)
