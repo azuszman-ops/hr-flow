@@ -194,7 +194,10 @@ async def main():
                     await db.flush()
                 db.add(OnboardingPerson(tenant_id=tenant.id, employee_id=emp.id, segment_id=seg_by_name[seg_name].id,
                                         language=lang, birth_day=bd, birth_month=bm, first_day_info=info))
-            print(f"Dodano {len(PERSONS)} osób (kody: " + ", ".join(f"{p[0]} {p[5]:02d}{p[6]:02d}" for p in PERSONS) + ")")
+            if BEZ_OSOB:
+                print("Osoby pominięte (--bez-osob)")
+            else:
+                print(f"Dodano {len(PERSONS)} osób (kody: " + ", ".join(f"{p[0]} {p[5]:02d}{p[6]:02d}" for p in PERSONS) + ")")
             await db.flush()
             await refresh_long_module(db, tenant.id)
         await db.commit()
