@@ -4,56 +4,77 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{{ brand }}{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --brand: {{ color }}; }
-        .btn-brand { background: var(--brand); color: #fff; }
-        .btn-brand:hover { filter: brightness(1.08); }
-        .text-brand { color: var(--brand); }
-        .border-brand { border-color: var(--brand); }
-        .bg-brand-soft { background: color-mix(in srgb, var(--brand) 10%, white); }
-        .ob-body p { margin-bottom: .9rem; line-height: 1.65; }
-        .ob-body ul.ob-list { list-style: disc; padding-left: 1.4rem; margin-bottom: .9rem; line-height: 1.6; }
-        .ob-body ul.ob-list li { margin-bottom: .25rem; }
-        .ob-body h3.ob-h3 { font-weight: 600; font-size: 1.05rem; margin: 1.25rem 0 .5rem; color: #111827; }
+        /* Paleta Find Work (projekt Claude Design, 23.09.2026) */
+        :root {
+            --navy: #002a4e; --petrol: #00506f; --petrol-2: #005a7d;
+            --primary: {{ color }}; --primary-dark: #003f84; --accent: #0080c9; --done: #00a3ad;
+            --bg: #f3f5f6; --line: #e3e7ea; --ink: #1f2a33; --ink-2: #3c3c3c; --muted: #5b6670; --muted-2: #7a858f;
+        }
+        html { background: var(--bg); }
+        body { font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink-2); -webkit-font-smoothing: antialiased; background: var(--bg); }
+        .hero { background: linear-gradient(118deg, var(--petrol) 0%, var(--petrol) 56%, var(--petrol-2) 56%, var(--petrol-2) 80%, var(--petrol) 80%); }
+        .hero-card { background: linear-gradient(118deg, var(--petrol) 0%, var(--petrol) 62%, var(--petrol-2) 62%, var(--petrol-2) 86%, var(--petrol) 86%); }
+        .btn-primary { background: var(--primary); color: #fff; font-weight: 600; border-radius: 12px; height: 54px; display: flex; align-items: center; justify-content: center; font-size: 16px; width: 100%; transition: background .15s; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-ghost { background: #fff; color: var(--ink); font-weight: 600; border: 1.5px solid #c3ccd3; border-radius: 12px; height: 52px; display: flex; align-items: center; justify-content: center; font-size: 15px; width: 100%; }
+        .btn-ghost:hover { background: var(--bg); }
+        .field { font-family: inherit; height: 52px; border: 1.5px solid #d5dbe0; border-radius: 12px; padding: 0 16px; font-size: 16px; color: var(--ink); outline: none; width: 100%; background: #fff; }
+        .field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,128,201,.18); }
+        .label { font-size: 11px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+        .kicker { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+        .logo-white { filter: brightness(0) invert(1); }
+        .lang-pill { font-size: 12px; font-weight: 600; min-width: 44px; height: 32px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; border: 1.5px solid; }
+        .ob-body { font-size: 15px; line-height: 1.65; color: var(--ink-2); }
+        .ob-body p { margin-bottom: 14px; text-wrap: pretty; }
+        .ob-body h3.ob-h3 { font-size: 16px; font-weight: 700; color: var(--ink); margin: 18px 0 8px; }
+        .ob-body ul.ob-list { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 8px; }
+        .ob-body ul.ob-list li { position: relative; padding-left: 18px; }
+        .ob-body ul.ob-list li::before { content: ""; position: absolute; left: 0; top: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
         .ob-body > :first-child { margin-top: 0; }
+        .ob-body > :last-child { margin-bottom: 0; }
+        .sticky-bar { position: sticky; bottom: 0; background: #fff; border-top: 1px solid var(--line); }
         [x-cloak] { display: none !important; }
     </style>
+    {% block head %}{% endblock %}
 </head>
-<body class="bg-gray-50 min-h-screen text-gray-800">
-
-<header class="bg-white border-b border-gray-200">
-    <div class="max-w-xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-        <a href="/o/{{ slug }}{% if person is defined and person %}/start{% endif %}" class="flex items-center gap-2 min-w-0">
+<body class="min-h-screen flex flex-col">
+{% block page %}
+<header class="bg-white border-b" style="border-color: var(--line)">
+    <div class="max-w-xl mx-auto px-[18px] py-3.5 flex items-center justify-between gap-3">
+        <a href="/o/{{ slug }}{% if person is defined and person %}/start{% endif %}" class="flex items-center min-w-0">
             {% if has_logo %}
-            <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="h-7 w-auto">
+            <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="h-6 w-auto">
             {% else %}
-            <span class="inline-block w-6 h-6 rounded-md" style="background: var(--brand)"></span>
-            <span class="font-semibold text-sm tracking-wide truncate">{{ brand }}</span>
+            <span class="font-bold text-[15px] tracking-wide truncate" style="color: var(--petrol)">{{ brand }}</span>
             {% endif %}
         </a>
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex items-center gap-2 shrink-0">
             {% if ready_langs|length > 1 %}
-            {% for l in ready_langs %}
-            <a href="/o/{{ slug }}/lang/{{ l }}"
-               class="text-[11px] font-medium px-2 py-1 rounded-full border {% if l == lang %}btn-brand border-transparent{% else %}border-gray-300 text-gray-500 hover:bg-gray-100{% endif %}">{{ LANG_LABELS[l] }}</a>
-            {% endfor %}
+            <div class="flex gap-1">
+                {% for l in ready_langs %}
+                <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill"
+                   style="{% if l == lang %}background: var(--petrol); color: #fff; border-color: var(--petrol){% else %}background: #fff; color: var(--ink); border-color: #d5dbe0{% endif %}">{{ LANG_LABELS[l] }}</a>
+                {% endfor %}
+            </div>
             {% endif %}
             {% if person is defined and person %}
-            <form method="post" action="/o/{{ slug }}/logout" class="ml-2">
-                <button class="text-[11px] text-gray-400 hover:text-gray-700">{{ t('logout') }}</button>
+            <form method="post" action="/o/{{ slug }}/logout" class="ml-1">
+                <button class="text-[12px] font-medium" style="color: var(--muted)">{{ t('logout') }}</button>
             </form>
             {% endif %}
         </div>
     </div>
 </header>
 
-<main class="max-w-xl mx-auto px-4 py-6">
+<main class="flex-1 w-full max-w-xl mx-auto px-[18px] pt-5 pb-6">
     {% block content %}{% endblock %}
 </main>
-
-<footer class="max-w-xl mx-auto px-4 py-6 text-center text-[11px] text-gray-400">
-    {{ brand }}
-</footer>
+{% block bottom %}{% endblock %}
+{% endblock %}
 </body>
 </html>

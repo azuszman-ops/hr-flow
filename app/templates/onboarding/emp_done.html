@@ -1,29 +1,54 @@
 {% extends "onboarding/emp_base.html" %}
-{% block content %}
-<div class="text-center mt-6">
-    <div class="w-16 h-16 mx-auto rounded-full bg-green-50 border border-green-300 text-green-600 text-3xl font-bold flex items-center justify-center">&#10003;</div>
-    <h1 class="text-2xl font-bold mt-4">{{ t('done_title') }}</h1>
-    <p class="text-sm text-gray-500 mt-1">{{ t('done_intro') }}</p>
-</div>
-
-<div class="mt-6 bg-white border border-gray-200 rounded-2xl p-5 space-y-2">
-    {% for it in items %}
-    <div class="flex items-start gap-3 text-sm">
-        <span class="w-5 h-5 rounded-md bg-green-500 text-white text-xs flex items-center justify-center shrink-0 mt-0.5">&#10003;</span>
-        <div class="min-w-0">
-            <div class="font-medium truncate">{{ it.title }}</div>
-            <div class="text-[11px] text-gray-400">{{ it.ack.acked_at|ob_dt }}</div>
+{% block page %}
+<div class="flex-1 flex flex-col">
+    <div class="hero text-white px-[22px] pt-[22px] pb-[72px]">
+        <div class="max-w-xl mx-auto">
+            <div class="flex items-center justify-between gap-2">
+                {% if has_logo %}
+                <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="logo-white h-6 w-auto -ml-1">
+                {% else %}
+                <span class="font-bold text-lg tracking-wide">{{ brand }}</span>
+                {% endif %}
+                <div class="flex items-center gap-2">
+                    {% if ready_langs|length > 1 %}
+                    {% for l in ready_langs %}
+                    <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill"
+                       style="{% if l == lang %}background: #fff; color: var(--petrol); border-color: #fff{% else %}background: transparent; color: #fff; border-color: rgba(255,255,255,.4){% endif %}">{{ LANG_LABELS[l] }}</a>
+                    {% endfor %}
+                    {% endif %}
+                    <form method="post" action="/o/{{ slug }}/logout"><button class="text-[12px] font-medium" style="color: #cfe6f2">{{ t('logout') }}</button></form>
+                </div>
+            </div>
+            <div class="mt-9 w-16 h-16 rounded-full text-white text-[30px] font-bold flex items-center justify-center" style="background: var(--done); box-shadow: 0 0 0 8px rgba(0,163,173,.25)">&#10003;</div>
+            <div class="mt-[22px] text-[32px] font-bold">{{ t('done_title') }}</div>
+            <div class="mt-1.5 text-[15px] leading-[1.5]" style="color: #e3f0f7">{{ t('done_intro') }}</div>
         </div>
     </div>
-    {% endfor %}
-</div>
 
-{% if person.first_day_info %}
-<div class="mt-4 bg-brand-soft border border-brand rounded-2xl p-5">
-    <div class="text-[11px] uppercase tracking-wider text-brand font-semibold">{{ t('done_first_day') }}</div>
-    <div class="ob-body text-sm mt-2">{{ person.first_day_info|ob_body }}</div>
-</div>
-{% endif %}
+    <div class="max-w-xl mx-auto w-full px-4 -mt-11 flex flex-col gap-3 pb-4">
+        <div class="bg-white rounded-[18px] px-[18px] py-4 flex flex-col gap-3" style="box-shadow: 0 12px 32px -14px rgba(0,42,78,.25)">
+            {% for it in items %}
+            <div class="flex items-start gap-3">
+                <div class="w-[22px] h-[22px] rounded-[7px] text-white text-[12px] font-bold flex items-center justify-center shrink-0 mt-px" style="background: var(--done)">&#10003;</div>
+                <div class="flex flex-col gap-px min-w-0">
+                    <div class="text-[14px] font-semibold" style="color: var(--ink)">{{ it.title }}</div>
+                    <div class="text-[12px]" style="color: var(--muted-2)">{{ t('acked_at', when=it.ack.acked_at|ob_dt) }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% if person.first_day_info %}
+        <div class="rounded-[18px] p-[18px] flex flex-col gap-2" style="background: #eef6fc; border: 1.5px solid #bcdcf0">
+            <div class="kicker font-bold" style="color: var(--primary)">{{ t('done_first_day') }}</div>
+            <div class="ob-body text-[14px]" style="color: #3c4650">{{ person.first_day_info|ob_body }}</div>
+        </div>
+        {% endif %}
+    </div>
 
-<a href="/o/{{ slug }}/start" class="mt-6 block text-center border border-gray-300 rounded-xl py-3 text-sm font-medium text-gray-600 hover:bg-gray-100">{{ t('done_back') }}</a>
+    <div class="sticky-bar mt-auto">
+        <div class="max-w-xl mx-auto px-[18px] pt-3.5 pb-[26px]">
+            <a href="/o/{{ slug }}/start" class="btn-ghost">{{ t('done_back') }}</a>
+        </div>
+    </div>
+</div>
 {% endblock %}

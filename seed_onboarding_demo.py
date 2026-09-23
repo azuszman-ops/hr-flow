@@ -128,6 +128,20 @@ PERSONS = [
 ]
 
 
+async def refresh_branding(db, tenant_id: int):
+    """Logo Find Work (seed_assets/findwork-logo.png) i kolor główny z projektu Claude Design. Nie nadpisuje istniejącego logo."""
+    s = (await db.execute(select(OnboardingSettings).where(OnboardingSettings.tenant_id == tenant_id))).scalar_one_or_none()
+    if not s:
+        return
+    if s.brand_color in (None, "#1d4ed8"):
+        s.brand_color = "#004b9b"
+    path = os.path.join(ASSETS, "findwork-logo.png")
+    if not s.logo_data and os.path.exists(path):
+        with open(path, "rb") as f:
+            s.logo_data, s.logo_content_type = f.read(), "image/png"
+        print("Logo Find Work wgrane.")
+
+
 async def refresh_long_module(db, tenant_id: int):
     """Moduł „Bezpieczeństwo na hali" w Automotive 1: długa treść + 2 ilustracje z seed_assets (idempotentnie)."""
     seg = (await db.execute(select(OnboardingSegment).where(
@@ -160,6 +174,9 @@ async def refresh_long_module(db, tenant_id: int):
 async def main():
     await init_db()
     async with AsyncSessionLocal() as db:
+        from sqlalchemy import text
+        await db.execute(text("ALTER TABLE onboarding_settings ADD COLUMN IF NOT EXISTS help_phone VARCHAR(40)"))
+        await db.commit()
         tenant = (await db.execute(select(Tenant).where(Tenant.slug == "find-work"))).scalar_one_or_none()
         if not tenant:
             tenant = Tenant(name="Find Work", slug="find-work")
@@ -169,7 +186,9 @@ async def main():
 
         settings = (await db.execute(select(OnboardingSettings).where(OnboardingSettings.tenant_id == tenant.id))).scalar_one_or_none()
         if not settings:
-            db.add(OnboardingSettings(tenant_id=tenant.id, brand_name="Find Work", brand_color="#1d4ed8"))
+            db.add(OnboardingSettings(tenant_id=tenant.id, brand_name="Find Work", brand_color="#004b9b"))
+            await db.flush()
+        await refresh_branding(db, tenant.id)
 
         existing = (await db.execute(select(OnboardingSegment).where(OnboardingSegment.tenant_id == tenant.id))).scalars().all()
         if existing:

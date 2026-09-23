@@ -73,6 +73,10 @@
             <input type="file" name="logo" accept="image/*" class="text-xs text-gray-500 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-blue-50 file:text-blue-700">
         </div>
         <div>
+            <label class="text-xs text-gray-500">Telefon pomocy przy logowaniu (opcjonalnie, np. +48 603 111 383)</label>
+            <input name="help_phone" value="{{ settings.help_phone or '' }}" class="w-full border border-gray-300 rounded-lg px-3 py-2">
+        </div>
+        <div>
             <label class="text-xs text-gray-500">Tekst powitalny na ekranie startowym (opcjonalnie)</label>
             <textarea name="welcome_text" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2" placeholder="Domyślnie: Przejdź wszystkie moduły przed pierwszym dniem pracy...">{{ settings.welcome_text or '' }}</textarea>
         </div>

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -30,7 +30,7 @@ from app.models_onboarding import (
 )
 from app.services.messaging import send_whatsapp, validate_phone
 from app.services.onboarding_i18n import (
-    t, normalize_lang, LANG_LABELS, LANG_NAMES, SUPPORTED_LANGS, READY_LANGS,
+    t, normalize_lang, modules_count, LANG_LABELS, LANG_NAMES, SUPPORTED_LANGS, READY_LANGS,
 )
 
 router = APIRouter()
@@ -147,7 +147,21 @@ def build_login_link(slug: str, token: str | None = None) -> str:
     return f"{url}?t={token}" if token else url
 
 
+_SCHEMA_READY = False
+
+
+async def _ensure_schema(db: AsyncSession):
+    """Kolumny dodane po pierwszym wdrożeniu (create_all nie dodaje kolumn). Idempotentne, raz na proces."""
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+    await db.execute(text("ALTER TABLE onboarding_settings ADD COLUMN IF NOT EXISTS help_phone VARCHAR(40)"))
+    await db.commit()
+    _SCHEMA_READY = True
+
+
 async def get_settings(db: AsyncSession, tenant: Tenant) -> OnboardingSettings:
+    await _ensure_schema(db)
     s = (await db.execute(
         select(OnboardingSettings).where(OnboardingSettings.tenant_id == tenant.id)
     )).scalar_one_or_none()
@@ -649,7 +663,8 @@ async def ob_admin_attachment(tenant_id: int, attachment_id: int, db: AsyncSessi
 
 @router.post("/admin/{tenant_id}/onboarding/settings")
 async def ob_admin_settings(request: Request, tenant_id: int, brand_name: str = Form(""),
-                            brand_color: str = Form("#1d4ed8"), welcome_text: str = Form(""),
+                            brand_color: str = Form("#004b9b"), welcome_text: str = Form(""),
+                            help_phone: str = Form(""),
                             logo: UploadFile = File(None), remove_logo: str = Form(""),
                             db: AsyncSession = Depends(get_db), tenant: Tenant = Depends(get_authed_tenant)):
     settings = await require_editor(request, tenant_id, db, tenant)
@@ -657,6 +672,7 @@ async def ob_admin_settings(request: Request, tenant_id: int, brand_name: str = 
     if re.fullmatch(r"#[0-9a-fA-F]{6}", brand_color.strip()):
         settings.brand_color = brand_color.strip()
     settings.welcome_text = welcome_text.strip() or None
+    settings.help_phone = help_phone.strip()[:40] or None
     if remove_logo == "on":
         settings.logo_data, settings.logo_content_type = None, None
     if logo and logo.filename:
@@ -717,7 +733,7 @@ def _emp_ctx(request: Request, tenant: Tenant, settings: OnboardingSettings, lan
     ctx = {
         "request": request, "tenant": tenant, "settings": settings, "lang": lang,
         "brand": settings.brand_name or tenant.name, "color": settings.brand_color,
-        "has_logo": bool(settings.logo_data), "slug": tenant.slug,
+        "has_logo": bool(settings.logo_data), "slug": tenant.slug, "help_phone": settings.help_phone,
         "ready_langs": READY_LANGS, "t": lambda key, **kw: t(lang, key, **kw),
     }
     ctx.update(extra)
@@ -836,9 +852,12 @@ async def ob_emp_start(request: Request, slug: str, db: AsyncSession = Depends(g
     total_min = sum((it["m"].estimated_minutes or 0) for it in items)
     done = all(it["state"] == "done" for it in items) and bool(items)
     next_item = next((it for it in items if it["state"] == "now"), None)
+    acked = len([it for it in items if it["state"] == "done"])
+    pct = int(acked * 100 / len(items)) if items else 0
     return templates.TemplateResponse("onboarding/emp_start.html", _emp_ctx(
         request, tenant, settings, lang, person=person, items=items, total_min=total_min,
         done=done, next_item=next_item, locked_msg=request.query_params.get("locked"),
+        acked=acked, pct=pct, modules_label=modules_count(lang, len(items)),
     ))
 
 

@@ -1,30 +1,82 @@
 {% extends "onboarding/emp_base.html" %}
-{% block content %}
-<div class="bg-white border border-gray-200 rounded-2xl p-6 mt-4">
-    <h1 class="text-2xl font-bold leading-tight">{{ t('login_title', brand=brand) }}</h1>
-    <p class="text-sm text-gray-500 mt-2">{{ t('login_intro') }}</p>
+{% block page %}
+<div class="min-h-screen lg:grid lg:grid-cols-2">
 
-    {% if error == '1' %}
-    <div class="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{{ t('login_error') }}</div>
-    {% elif error == '2' %}
-    <div class="mt-4 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">{{ t('login_no_segment') }}</div>
-    {% endif %}
+    <!-- Hero (na desktopie lewa kolumna, na telefonie góra) -->
+    <div class="hero text-white px-[22px] pt-[22px] pb-[84px] lg:px-14 lg:py-12 lg:pb-12 flex flex-col">
+        <div class="flex items-center justify-between gap-2">
+            {% if has_logo %}
+            <img src="/o/{{ slug }}/logo" alt="{{ brand }}" class="logo-white h-[30px] lg:h-10 w-auto -ml-1.5">
+            {% else %}
+            <span class="font-bold text-lg tracking-wide">{{ brand }}</span>
+            {% endif %}
+        </div>
+        {% if ready_langs|length > 1 %}
+        <div class="flex gap-1.5 mt-[22px] lg:hidden">
+            {% for l in ready_langs %}
+            <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill"
+               style="{% if l == lang %}background: #fff; color: var(--petrol); border-color: #fff; font-weight: 700{% else %}background: transparent; color: #fff; border-color: rgba(255,255,255,.4){% endif %}">{{ LANG_LABELS[l] }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="lg:mt-auto">
+            <div class="kicker mt-10 lg:mt-0" style="color: #cfe6f2; letter-spacing: .16em; font-size: 12px">{{ t('kicker') }}</div>
+            <div class="mt-2.5 text-[30px] lg:text-[50px] leading-[1.15] lg:leading-[1.08]" style="text-wrap: balance">
+                <div class="font-light">{{ t('h_light') }}</div>
+                <div class="font-bold">{{ t('h_bold') }}</div>
+            </div>
+            <div class="hidden lg:flex mt-12 gap-7 flex-wrap text-[14px] font-medium">
+                {% for s in ['s1', 's2', 's3'] %}
+                <div class="flex items-center gap-2.5"><span class="w-7 h-7 rounded-full flex items-center justify-center text-[13px] font-bold" style="border: 1.5px solid rgba(255,255,255,.5)">{{ loop.index }}</span>{{ t(s) }}</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
 
-    <form method="post" action="/o/{{ slug }}/login" class="mt-6 space-y-4">
-        <div>
-            <label for="ob-phone" class="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">{{ t('phone_label') }}</label>
-            <input id="ob-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ prefill }}" required
-                   placeholder="{{ t('phone_placeholder') }}"
-                   class="w-full border border-gray-300 rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-[var(--brand)]">
+    <!-- Karta logowania -->
+    <div class="lg:px-14 lg:py-10 flex flex-col">
+        {% if ready_langs|length > 1 %}
+        <div class="hidden lg:flex justify-end gap-1.5">
+            {% for l in ready_langs %}
+            <a href="/o/{{ slug }}/lang/{{ l }}" class="lang-pill"
+               style="{% if l == lang %}background: var(--petrol); color: #fff; border-color: var(--petrol){% else %}background: #fff; color: var(--ink); border-color: #d5dbe0{% endif %}">{{ LANG_LABELS[l] }}</a>
+            {% endfor %}
         </div>
-        <div>
-            <label for="ob-code" class="block text-[11px] uppercase tracking-wider text-gray-500 mb-1">{{ t('code_label') }}</label>
-            <input id="ob-code" name="code" type="text" inputmode="numeric" autocomplete="off" required maxlength="6"
-                   placeholder="{{ t('code_placeholder') }}"
-                   class="w-full border border-gray-300 rounded-xl px-4 py-3 text-base tracking-widest focus:outline-none focus:ring-2 focus:ring-[var(--brand)]">
-            <div class="text-xs text-gray-400 mt-1">{{ t('code_hint') }}</div>
+        {% endif %}
+        <div class="-mt-[52px] mx-4 lg:mx-0 lg:mt-auto lg:mb-auto lg:self-center lg:w-[420px] bg-white rounded-[20px] p-6 lg:p-9 lg:px-8 flex flex-col gap-[18px]"
+             style="box-shadow: 0 12px 32px -12px rgba(0,42,78,.25)">
+            <div class="hidden lg:block text-2xl font-bold" style="color: var(--ink)">{{ t('login_button') }}</div>
+            <div class="text-[14px] leading-[1.55]" style="color: var(--muted)">{{ t('login_intro') }}</div>
+            {% if error == '1' %}
+            <div class="text-[13px] leading-[1.45] rounded-xl px-3.5 py-3" style="background: #fdf1f1; border: 1px solid #f3c9c9; color: #a42a2a">{{ t('login_error') }}</div>
+            {% elif error == '2' %}
+            <div class="text-[13px] leading-[1.45] rounded-xl px-3.5 py-3" style="background: #fff8e6; border: 1px solid #f1dfae; color: #7a5a00">{{ t('login_no_segment') }}</div>
+            {% endif %}
+            <form method="post" action="/o/{{ slug }}/login" class="flex flex-col gap-[18px]">
+                <div class="flex flex-col gap-1.5">
+                    <label for="ob-phone" class="label">{{ t('phone_label') }}</label>
+                    <input id="ob-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" value="{{ prefill }}" required
+                           placeholder="{{ t('phone_placeholder') }}" class="field">
+                </div>
+                <div class="flex flex-col gap-1.5">
+                    <label for="ob-code" class="label">{{ t('code_label') }}</label>
+                    <input id="ob-code" name="code" type="text" inputmode="numeric" autocomplete="off" required maxlength="6"
+                           placeholder="{{ t('code_placeholder') }}" class="field font-semibold text-[20px]" style="letter-spacing: .4em">
+                    <div class="text-[12px]" style="color: var(--muted-2)">{{ t('code_hint') }}</div>
+                </div>
+                <button type="submit" class="btn-primary">{{ t('login_button') }}</button>
+            </form>
+            {% if help_phone %}
+            <div class="hidden lg:flex justify-center gap-1.5 text-[13px] flex-wrap" style="color: var(--muted)">{{ t('help') }} <a href="tel:{{ help_phone|replace(' ', '') }}" class="font-bold" style="color: var(--primary)">{{ help_phone }}</a></div>
+            {% endif %}
         </div>
-        <button type="submit" class="btn-brand w-full rounded-xl py-3 text-base font-semibold">{{ t('login_button') }}</button>
-    </form>
+        {% if help_phone %}
+        <div class="lg:hidden mt-auto px-6 pt-5 pb-7 flex flex-col items-center gap-1 text-[13px]" style="color: var(--muted)">
+            <div>{{ t('help') }}</div>
+            <a href="tel:{{ help_phone|replace(' ', '') }}" class="font-bold" style="color: var(--primary)">{{ help_phone }}</a>
+        </div>
+        {% endif %}
+        <div class="hidden lg:block text-center text-[12px] mt-4" style="color: #8a959e">{{ brand }}</div>
+    </div>
 </div>
 {% endblock %}

@@ -26,6 +26,7 @@ class OnboardingSettings(Base):
     logo_data = Column(LargeBinary, nullable=True)
     logo_content_type = Column(String(100), nullable=True)
     welcome_text = Column(Text, nullable=True)
+    help_phone = Column(String(40), nullable=True)   # „Problem z logowaniem?" na stronie pracownika
     # Pakiet Rozszerzony: klient sam edytuje segmenty i moduły.
     editor_enabled = Column(Boolean, nullable=False, default=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
